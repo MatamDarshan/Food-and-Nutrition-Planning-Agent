@@ -22,6 +22,7 @@ from rag.retriever import (
     get_retriever,
     retrieve_nutrition_knowledge,
     retrieve_relevant_documents,
+    retrieve_with_details,
 )
 from rag.text_splitter import split_nutrition_documents
 from rag.vector_store import (
@@ -132,6 +133,105 @@ class TestRAGRetriever:
         tool_output = retrieve_nutrition_knowledge.invoke({"query": query})
         assert "[Source:" in tool_output
         assert "Page" in tool_output
+
+    def test_calcium_query_retrieval(self):
+        """Test retrieval for 'What are the top dietary sources of calcium in Indian diets?'."""
+        query = "What are the top dietary sources of calcium in Indian diets?"
+        docs = retrieve_relevant_documents(query, k=3)
+        assert len(docs) > 0, "Should retrieve relevant calcium excerpts."
+        content_joined = " ".join(d.page_content for d in docs).lower()
+        assert any(w in content_joined for w in ["calcium", "ragi", "til", "sesame", "milk", "1,000"]), (
+            "Retrieved excerpts should mention Indian calcium sources."
+        )
+
+        tool_output = retrieve_nutrition_knowledge.invoke({"query": query})
+        assert "[Source:" in tool_output
+        assert "Page" in tool_output
+
+    def test_iron_query_retrieval(self):
+        """Test retrieval for 'What is the RDA for iron and how can absorption be enhanced?'."""
+        query = "What is the RDA for iron and how can absorption be enhanced?"
+        docs = retrieve_relevant_documents(query, k=3)
+        assert len(docs) > 0, "Should retrieve relevant iron excerpts."
+        content_joined = " ".join(d.page_content for d in docs).lower()
+        assert any(w in content_joined for w in ["iron", "19", "29", "vitamin c", "bajra"]), (
+            "Retrieved excerpts should mention iron guidelines."
+        )
+
+        tool_output = retrieve_nutrition_knowledge.invoke({"query": query})
+        assert "[Source:" in tool_output
+        assert "Page" in tool_output
+
+    def test_vitamin_b12_query_retrieval(self):
+        """Test retrieval for 'Why is Vitamin B12 important and what are its sources?'."""
+        query = "Why is Vitamin B12 important and what are its sources for Indian vegetarians?"
+        docs = retrieve_relevant_documents(query, k=3)
+        assert len(docs) > 0, "Should retrieve relevant Vitamin B12 excerpts."
+        content_joined = " ".join(d.page_content for d in docs).lower()
+        assert any(w in content_joined for w in ["b12", "cobalamin", "milk", "dairy", "vegan", "2.2"]), (
+            "Retrieved excerpts should mention Vitamin B12."
+        )
+
+        tool_output = retrieve_nutrition_knowledge.invoke({"query": query})
+        assert "[Source:" in tool_output
+        assert "Page" in tool_output
+
+    def test_healthy_fats_query_retrieval(self):
+        """Test retrieval for 'What are the ICMR-NIN recommendations for visible cooking oils?'."""
+        query = "What are the ICMR-NIN recommendations for visible cooking oils and fatty acid balance?"
+        docs = retrieve_relevant_documents(query, k=3)
+        assert len(docs) > 0, "Should retrieve relevant dietary fats excerpts."
+        content_joined = " ".join(d.page_content for d in docs).lower()
+        assert any(w in content_joined for w in ["visible fat", "mufa", "pufa", "trans fat", "20g"]), (
+            "Retrieved excerpts should mention cooking oils guidelines."
+        )
+
+        tool_output = retrieve_nutrition_knowledge.invoke({"query": query})
+        assert "[Source:" in tool_output
+        assert "Page" in tool_output
+
+    def test_carbohydrates_query_retrieval(self):
+        """Test retrieval for 'What percentage of daily calories should come from carbohydrates?'."""
+        query = "What percentage of daily calories should come from carbohydrates according to ICMR-NIN?"
+        docs = retrieve_relevant_documents(query, k=3)
+        assert len(docs) > 0, "Should retrieve relevant carbohydrate excerpts."
+        content_joined = " ".join(d.page_content for d in docs).lower()
+        assert any(w in content_joined for w in ["carbohydrate", "50%", "55%", "complex", "sugar"]), (
+            "Retrieved excerpts should mention carbohydrate guidelines."
+        )
+
+        tool_output = retrieve_nutrition_knowledge.invoke({"query": query})
+        assert "[Source:" in tool_output
+        assert "Page" in tool_output
+
+    def test_multiple_irrelevant_queries(self):
+        """Verify that out-of-domain queries across multiple domains are cleanly rejected."""
+        irrelevant_queries = [
+            "Who won the cricket world cup?",
+            "What rocket launched Apollo 11 to the moon?",
+            "How do you replace brake pads on a Toyota Camry?",
+            "What is the capital city of Australia?",
+            "How do you configure a reverse proxy in Nginx?",
+        ]
+        for q in irrelevant_queries:
+            docs = retrieve_relevant_documents(q, k=3)
+            assert len(docs) == 0, f"Query '{q}' should be rejected as irrelevant."
+            tool_output = retrieve_nutrition_knowledge.invoke({"query": q})
+            assert "No relevant nutrition document sections were found" in tool_output
+
+    def test_retrieve_with_details_structure(self):
+        """Verify that retrieve_with_details outputs structured dicts with exact L2 vector distance."""
+        details = retrieve_with_details("benefits of millets", k=2)
+        assert len(details) == 2
+        for item in details:
+            assert "document" in item
+            assert "page" in item
+            assert "distance" in item
+            assert isinstance(item["distance"], float)
+            assert "is_relevant" in item
+            assert item["is_relevant"] is True
+            assert "text" in item
+            assert len(item["text"]) > 0
 
     def test_irrelevant_query_handling(self):
         """Verify that completely out-of-domain queries return the graceful notice."""

@@ -152,6 +152,70 @@ def build_dietary_guidelines_pdf():
         "<b>ICMR-NIN Recommendation:</b> At least 50% to 70% of total daily cereal intake should be derived from intact whole grains and millets rather than ultra-processed refined flours.",
         callout_style,
     ))
+    story.append(PageBreak())
+
+    # Chapter 5: Essential Micronutrients: Calcium, Iron, and Vitamin B12
+    story.append(Paragraph("Chapter 5: Essential Micronutrients: Calcium, Iron, and Vitamin B12", heading_style))
+    story.append(Paragraph(
+        "Micronutrients are vital organic and inorganic compounds required in small quantities for cellular metabolism, "
+        "structural integrity, and enzymatic cofactor functions. ICMR-NIN establishes specific daily dietary allowances for Indians.",
+        body_style,
+    ))
+    story.append(Paragraph(
+        "<b>1. Calcium:</b><br/>"
+        "• <b>Recommended Dietary Allowance (RDA):</b> 1,000 mg/day for adult men and women, increasing to 1,200 mg/day for postmenopausal women and the elderly.<br/>"
+        "• <b>Primary Food Sources:</b> Finger millet (Ragi) provides 344 mg/100g; white sesame seeds (Til) provide ~1,450 mg/100g; cow's milk (120 mg/100ml), paneer (480 mg/100g), and dark green leafy vegetables (curry leaves, amaranth).<br/>"
+        "• <b>Absorption Context:</b> Adequate Vitamin D synthesis (via 20–30 minutes of midday sunlight exposure) is mandatory for active intestinal calcium transport. Excessive dietary oxalates (in raw spinach) and phytates can inhibit calcium bioavailability.",
+        body_style,
+    ))
+    story.append(Paragraph(
+        "<b>2. Iron:</b><br/>"
+        "• <b>Recommended Dietary Allowance (RDA):</b> 19 mg/day for adult men, and 29 mg/day for adult non-pregnant women of reproductive age.<br/>"
+        "• <b>Plant Sources (Non-Heme Iron):</b> Pearl millet (Bajra, 8 mg/100g), garden cress seeds (Alivera, 100 mg/100g), green leafy vegetables (Palak, fenugreek/methi), and lentils/chana.<br/>"
+        "• <b>Bioavailability Enhancers & Inhibitors:</b> Non-heme iron absorption is enhanced 2- to 3-fold by co-ingesting Vitamin C (citrus fruits, amla, lemon juice). Polyphenols and tannins in tea and coffee strongly inhibit iron absorption and should be avoided for 1 hour before and after meals.",
+        body_style,
+    ))
+    story.append(Paragraph(
+        "<b>3. Vitamin B12 (Cobalamin):</b><br/>"
+        "• <b>Recommended Dietary Allowance (RDA):</b> 2.2 to 2.5 mcg/day for Indian adults.<br/>"
+        "• <b>Biological Role:</b> Essential for red blood cell formation (preventing megaloblastic anemia), neurological integrity (myelin sheath maintenance), and DNA synthesis.<br/>"
+        "• <b>Dietary Sources & Vegan Considerations:</b> Vitamin B12 is synthesized exclusively by microorganisms and is absent from unfortified plant foods. In Indian vegetarian diets, dairy products (milk, curd, paneer) are the sole natural dietary source. Non-vegetarians obtain it from eggs, fish, and poultry. Strict vegans and individuals with gastrointestinal malabsorption require fortified foods or oral B12 supplements.",
+        body_style,
+    ))
+    story.append(Spacer(1, 10))
+
+    # Chapter 6: Dietary Fats, Fatty Acid Balance, and Cooking Oils
+    story.append(Paragraph("Chapter 6: Dietary Fats, Fatty Acid Balance, and Cooking Oils", heading_style))
+    story.append(Paragraph(
+        "Dietary fats are an essential macronutrient providing concentrated energy (9 kcal/g), aiding the absorption of fat-soluble "
+        "vitamins (A, D, E, K), and supplying essential fatty acids (linoleic and alpha-linolenic acids).",
+        body_style,
+    ))
+    story.append(Paragraph(
+        "<b>ICMR-NIN Fat Intake Guidelines:</b><br/>"
+        "• <b>Visible Fat Allowance:</b> 20g to 30g visible fat per person per day (approximately 4 to 6 teaspoons).<br/>"
+        "• <b>Fatty Acid Profile Balance:</b> Diets should maintain an equitable balance between Saturated Fatty Acids (SFA, <8-10% of total energy), Monounsaturated Fatty Acids (MUFA, 10–12%), and Polyunsaturated Fatty Acids (PUFA, 6–8%).<br/>"
+        "• <b>Cooking Oil Recommendations:</b> ICMR-NIN recommends rotating or blending cooking oils (such as groundnut/mustard/rice bran oil with sunflower/safflower oil) to optimize the Omega-6 to Omega-3 ratio between 5:1 and 10:1.<br/>"
+        "• <b>Omega-3 Fatty Acids:</b> Alpha-linolenic acid (ALA) is concentrated in flaxseeds (Alsi), chia seeds, walnuts, and mustard oil. Marine sources (fatty fish) provide active EPA and DHA.<br/>"
+        "• <b>Zero Industrial Trans Fats:</b> Partially hydrogenated vegetable fats (vanaspati, bakery shortenings, reused fried oils) should be completely avoided to prevent cardiovascular disease.",
+        body_style,
+    ))
+    story.append(Spacer(1, 10))
+
+    # Chapter 7: Carbohydrates, Energy Distribution, and Food Synergy
+    story.append(Paragraph("Chapter 7: Carbohydrates, Energy Distribution, and Food Synergy", heading_style))
+    story.append(Paragraph(
+        "Carbohydrates constitute the primary metabolic fuel source for the human brain and muscular contraction. "
+        "ICMR-NIN recommends that carbohydrates contribute <b>50% to 55% of total daily energy</b>, and should not exceed 60%.",
+        body_style,
+    ))
+    story.append(Paragraph(
+        "<b>Carbohydrate Quality & Glycemic Load:</b><br/>"
+        "• <b>Complex Carbohydrates:</b> Found in whole grains, millets, pulses, and fibrous vegetables. These contain long polysaccharide chains that break down slowly, maintaining stable insulin response.<br/>"
+        "• <b>Simple Sugars Restriction:</b> Added sugars, confectionery, sugar-sweetened beverages, and ultra-refined flours should be restricted to less than 5% of total caloric intake.<br/>"
+        "• <b>Traditional Food Synergy:</b> Combining traditional foods enhances nutrition: (1) Cereal-Pulse combinations (Khichdi, Dosa-Sambar) provide complete amino acids; (2) Adding lemon juice (Vitamin C) to iron-rich green leafy vegetables (Palak, Methi) multiplies iron absorption; (3) Incorporating moderate healthy fat (oil/ghee) with yellow-orange vegetables (carrots, pumpkins) enables provitamin A carotenoid uptake.",
+        body_style,
+    ))
 
     doc.build(story)
     print(f"Generated: {pdf_path}")
