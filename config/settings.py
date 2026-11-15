@@ -56,8 +56,24 @@ class Settings(BaseSettings):
 
     @property
     def api_key(self) -> str:
-        """Return the effective API key, ignoring placeholder values."""
+        """Return the effective API key, checking environment, .env, and .api key files."""
+        # 1. Check direct settings / environment variables
         key = (self.gemini_api_key or self.google_api_key or "").strip()
+        
+        # 2. If not found, check dedicated key files (e.g. .api key, .api_key, .api)
+        if not key or key in ("your_gemini_api_key_here", "your_api_key_here", "AIzaSy..."):
+            for fname in [".api key", ".api_key", ".apikey", ".api", "api_key.txt", "apikey.txt"]:
+                key_file = BASE_DIR / fname
+                if key_file.exists():
+                    try:
+                        file_content = key_file.read_text(encoding="utf-8").strip()
+                        if file_content and not file_content.startswith("#"):
+                            key = file_content.splitlines()[0].strip().strip("'\"")
+                            if key:
+                                break
+                    except Exception:
+                        pass
+
         # Filter out placeholder strings
         if key in ("your_gemini_api_key_here", "your_api_key_here", "AIzaSy..."):
             return ""
