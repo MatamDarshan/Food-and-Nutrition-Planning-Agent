@@ -1,82 +1,104 @@
 """
 config/settings.py
 ------------------
-Central application configuration using pydantic-settings.
-Reads values from environment variables or a local .env file.
+Centralized application settings using pydantic-settings.
+Consistently uses GOOGLE_API_KEY across all agent nodes and backend services,
+automatically loaded from the local .env file.
 """
 
+import os
 from pathlib import Path
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=str(BASE_DIR / ".env"),
         env_file_encoding="utf-8",
-        extra="ignore"
+        extra="ignore",
     )
 
-    # Gemini API configuration
-    gemini_api_key: str = Field(
-        default="",
-        validation_alias="GEMINI_API_KEY",
-        description="Google Gemini API Key"
-    )
+    # Google Gemini API configuration — centralized on GOOGLE_API_KEY
     google_api_key: str = Field(
         default="",
         validation_alias="GOOGLE_API_KEY",
-        description="Fallback alias for Gemini API key"
-    )
-    model_name: str = Field(
-        default="gemini-2.0-flash",
-        description="Default Gemini model"
-    )
-    temperature: float = Field(
-        default=0.2,
-        description="Model temperature for reasoning"
+        description="Google Gemini API Key",
     )
 
-    # Agent configuration
+    # Gemini model selection
+    model_name: str = Field(
+        default="gemini-2.0-flash",
+        description="Selected Gemini model identifier",
+    )
+
+    temperature: float = Field(
+        default=0.2,
+        description="Model temperature for reasoning",
+    )
+
+    # Agent revision guard
     max_revisions: int = Field(
         default=2,
-        description="Maximum retry attempts on validation failure"
+        description="Maximum retry attempts on validation failure",
     )
+
     calorie_deviation_threshold: float = Field(
         default=0.15,
-        description="Acceptable calorie target deviation percentage (+/- 15%)"
+        description="Acceptable calorie target deviation percentage (+/- 15%)",
     )
 
     # Paths
     food_csv_path: Path = Field(
         default=BASE_DIR / "data" / "food_data.csv",
-        description="Path to Indian food database CSV"
+        description="Path to Indian food database CSV",
     )
 
-    @property
-    def api_key(self) -> str:
-        """Return the effective API key, checking environment, .env, and .api key files."""
-        # 1. Check direct settings / environment variables
-        key = (self.gemini_api_key or self.google_api_key or "").strip()
-        
-        # 2. If not found, check dedicated key files (e.g. .api key, .api_key, .api)
+    def model_post_init(self, __context) -> None:
+        """Post-initialization to normalize key and sync environment cleanly."""
+        key = (self.google_api_key or "").strip()
+
+        # If GOOGLE_API_KEY was not found, check fallback GEMINI_API_KEY in env
         if not key or key in ("your_gemini_api_key_here", "your_api_key_here", "AIzaSy..."):
-            for fname in [".api key", ".api_key", ".apikey", ".api", "api_key.txt", "apikey.txt"]:
-                key_file = BASE_DIR / fname
-                if key_file.exists():
+            key = (os.environ.get("GEMINI_API_KEY") or "").strip()
+
+        # Check local key files (e.g., .api key, .api_key, .api)
+        if not key or key in ("your_gemini_api_key_here", "your_api_key_here", "AIzaSy..."):
+            for fname in [".api key", ".api_key", ".apikey", ".api", "api_key.txt"]:
+                p = BASE_DIR / fname
+                if p.exists():
                     try:
-                        file_content = key_file.read_text(encoding="utf-8").strip()
-                        if file_content and not file_content.startswith("#"):
-                            key = file_content.splitlines()[0].strip().strip("'\"")
-                            if key:
+                        content = p.read_text(encoding="utf-8").strip()
+                        if content and not content.startswith("#"):
+                            first_line = content.splitlines()[0].strip().strip("'\"")
+                            if first_line and len(first_line) > 10:
+                                key = first_line
                                 break
                     except Exception:
                         pass
 
-        # Filter out placeholder strings
+        # Discard placeholder strings
         if key in ("your_gemini_api_key_here", "your_api_key_here", "AIzaSy..."):
-            return ""
-        return key
+            key = ""
 
+        self.google_api_key = key
+
+        # Consistently set only GOOGLE_API_KEY in os.environ and remove GEMINI_API_KEY
+        # to prevent conflicting duplicate key warnings from langchain-google-genai
+        if self.google_api_key:
+            os.environ["GOOGLE_API_KEY"] = self.google_api_key
+        else:
+            os.environ.pop("GOOGLE_API_KEY", None)
+
+        os.environ.pop("GEMINI_API_KEY", None)
+
+    @property
+    def api_key(self) -> str:
+        """Return the centralized Google API key."""
+        return self.google_api_key
+
+
+# Centralized singleton settings instance
 settings = Settings()

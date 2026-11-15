@@ -2,6 +2,12 @@
 .env
 .env.local
 *.env
+.api key
+.api_key
+.apikey
+.api
+*api_key*
+*apikey*
 
 # Python Bytecode & Cache
 __pycache__/
