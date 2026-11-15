@@ -1,0 +1,58 @@
+food_id,food_name,calories,protein,carbohydrates,fats,fiber,diet_type,meal_type,food_category,ingredients,allergens,glycemic_index
+1,Idli,58,2.0,11.6,0.4,0.5,veg,breakfast,Grain,rice;urad dal;salt,none,69
+2,Dosa,133,3.2,24.8,2.5,0.8,veg,breakfast,Grain,rice;urad dal;oil;salt,none,77
+3,Upma,110,3.3,18.5,3.2,1.2,veg,breakfast,Grain,semolina;onion;oil;mustard seeds;curry leaves;salt,gluten,65
+4,Poha,120,2.0,24.5,1.8,0.9,veg,breakfast,Grain,flattened rice;onion;potato;peanuts;oil;turmeric,peanuts,55
+5,Aloo Paratha,262,5.8,36.2,10.3,2.5,veg,breakfast|lunch,Grain,whole wheat flour;potato;butter;spices,gluten|dairy,62
+6,Medu Vada,240,8.2,24.5,12.1,1.8,veg,breakfast|snack,Legume,urad dal;oil;curry leaves;salt,none,55
+7,Uttapam,118,3.5,20.2,2.8,1.1,veg,breakfast,Grain,rice;urad dal;onion;tomato;oil,none,68
+8,Wheat Bread Toast,265,9.0,48.5,3.6,2.7,veg,breakfast,Grain,whole wheat flour;yeast;salt;oil,gluten,72
+9,Besan Chilla,180,9.5,20.3,6.5,3.0,veg,breakfast|snack,Legume,gram flour;onion;tomato;spices;oil,none,48
+10,Ragi Mudde,158,3.4,33.3,1.0,3.6,veg,breakfast|lunch|dinner,Grain,finger millet flour;water;salt,none,65
+11,Dal Tadka,102,7.2,14.5,2.3,3.1,veg,lunch|dinner,Legume,yellow lentils;onion;tomato;garlic;cumin;turmeric;oil,none,32
+12,Rajma,127,7.5,20.8,2.0,6.2,veg,lunch|dinner,Legume,kidney beans;onion;tomato;spices,none,29
+13,Chana Masala,138,7.3,20.4,3.5,5.8,veg,lunch|dinner,Legume,chickpeas;onion;tomato;ginger;garlic;spices;oil,none,28
+14,Paneer Butter Masala,204,9.5,10.2,14.8,1.5,veg,lunch|dinner,Dairy,paneer;butter;cream;tomato;cashews;spices,dairy|tree_nuts,30
+15,Palak Paneer,165,10.2,7.5,10.8,2.4,veg,lunch|dinner,Dairy,spinach;paneer;cream;spices;oil,dairy,25
+16,Aloo Gobi,112,2.8,16.5,4.5,2.8,veg,lunch|dinner,Vegetable,potato;cauliflower;tomato;onion;spices;oil,none,65
+17,Dal Makhani,162,7.8,18.3,7.2,4.5,veg,lunch|dinner,Legume,black lentils;kidney beans;butter;cream;tomato;spices,dairy,30
+18,Baingan Bharta,92,2.1,10.2,5.0,3.8,veg,lunch|dinner,Vegetable,eggplant;onion;tomato;garlic;spices;oil,none,25
+19,Kadhi Pakora,148,4.5,15.8,7.8,1.5,veg,lunch|dinner,Dairy,yogurt;gram flour;onion;spices;oil,dairy,42
+20,Sambar,70,4.2,10.5,1.5,3.2,veg,breakfast|lunch|dinner,Legume,pigeon peas;tamarind;mixed vegetables;spices,none,35
+21,Chicken Curry,165,18.5,5.2,8.5,0.8,non-veg,lunch|dinner,Meat,chicken;onion;tomato;yogurt;spices;oil,dairy,10
+22,Egg Curry,148,10.2,6.8,9.5,0.9,non-veg,breakfast|lunch|dinner,Meat,eggs;onion;tomato;spices;oil,eggs,10
+23,Fish Curry,130,15.5,5.5,5.8,0.8,non-veg,lunch|dinner,Meat,fish;coconut;tomato;spices;tamarind,fish|tree_nuts,10
+24,Mutton Curry,218,20.2,4.8,13.5,0.6,non-veg,lunch|dinner,Meat,mutton;onion;yogurt;spices;oil,dairy,10
+25,Chicken Biryani,220,14.5,28.5,6.2,1.2,non-veg,lunch|dinner,Meat,basmati rice;chicken;yogurt;saffron;spices;oil,dairy,58
+26,Basmati Rice,150,3.5,32.8,0.3,0.4,veg,lunch|dinner,Grain,basmati rice;water;salt,none,58
+27,Whole Wheat Roti,233,7.8,44.5,3.5,5.0,veg,breakfast|lunch|dinner,Grain,whole wheat flour;water;salt;oil,gluten,62
+28,Brown Rice,123,2.7,25.8,0.9,1.8,veg,lunch|dinner,Grain,brown rice;water;salt,none,50
+29,Vegetable Khichdi,118,4.8,20.5,2.8,2.2,veg,lunch|dinner,Grain,rice;moong dal;mixed vegetables;ghee;spices,dairy,42
+30,Jeera Rice,165,3.5,32.5,3.8,0.5,veg,lunch|dinner,Grain,basmati rice;cumin;ghee;salt,dairy,60
+31,Tandoori Chicken,165,25.5,3.8,5.8,0.5,non-veg,dinner|snack,Meat,chicken;yogurt;lemon;spices;oil,dairy,10
+32,Egg Bhurji,158,11.5,4.2,11.0,0.5,non-veg,breakfast|snack,Meat,eggs;onion;tomato;spices;oil,eggs,10
+33,Fish Fry,180,20.5,5.2,8.5,0.3,non-veg,lunch|dinner|snack,Meat,fish;spices;lemon;oil,fish,10
+34,Chicken Tikka Masala,182,19.5,8.5,8.2,1.2,non-veg,lunch|dinner,Meat,chicken;cream;tomato;spices,dairy,15
+35,Mutton Rogan Josh,230,22.0,5.5,14.0,0.8,non-veg,lunch|dinner,Meat,mutton;yogurt;Kashmiri spices;oil,dairy,10
+36,Bhel Puri,165,4.5,32.5,4.2,2.5,veg,snack,Snack,puffed rice;onion;tomato;chutneys;sev;peanuts,peanuts|gluten,65
+37,Samosa,262,4.5,32.5,13.0,2.5,veg,snack,Snack,maida;potato;peas;spices;oil,gluten,70
+38,Dhokla,150,5.5,25.8,3.2,1.8,veg,breakfast|snack,Snack,chickpea flour;yogurt;spices;oil;mustard seeds,dairy,48
+39,Pani Puri,180,3.5,35.5,4.5,2.0,veg,snack,Snack,semolina;potato;chickpeas;tamarind water;spices,gluten,65
+40,Masala Chai,60,2.5,8.5,2.0,0.0,veg,breakfast|snack,Beverage,tea;milk;sugar;ginger;cardamom,dairy,55
+41,Paneer,265,18.3,1.2,20.8,0.0,veg,lunch|dinner|snack,Dairy,milk;lemon,dairy,10
+42,Plain Curd,60,3.1,4.0,3.2,0.0,veg,breakfast|lunch|dinner|snack,Dairy,milk;curd culture,dairy,36
+43,Sprouts Salad,85,7.5,12.0,1.5,4.5,veg,breakfast|snack,Legume,moong sprouts;chana sprouts;tomato;onion;lemon;spices,none,25
+44,Banana,89,1.1,22.8,0.3,2.6,veg,breakfast|snack,Fruit,banana,none,51
+45,Apple,52,0.3,13.8,0.2,2.4,veg,breakfast|snack,Fruit,apple,none,36
+46,Mango,60,0.8,15.0,0.4,1.6,veg,breakfast|snack,Fruit,mango,none,51
+47,Papaya,43,0.5,10.8,0.3,1.7,veg,breakfast|snack,Fruit,papaya,none,60
+48,Guava,68,2.6,14.3,1.0,5.4,veg,breakfast|snack,Fruit,guava,none,12
+49,Sweet Lassi,110,3.5,15.5,4.0,0.0,veg,breakfast|lunch|snack,Beverage,yogurt;water;sugar;cardamom,dairy,55
+50,Buttermilk / Chaas,42,1.8,5.5,1.5,0.0,veg,lunch|dinner|snack,Beverage,yogurt;water;salt;cumin;coriander,dairy,36
+51,Raita,65,2.8,6.5,3.2,0.5,veg,lunch|dinner,Dairy,yogurt;cucumber;onion;tomato;cumin;salt,dairy,36
+52,Chicken Seekh Kebab,180,22.5,4.5,8.5,0.8,non-veg,dinner|snack,Meat,minced chicken;onion;spices;oil,none,10
+53,Egg Omelette,154,10.5,2.0,11.5,0.3,non-veg,breakfast|snack,Meat,eggs;onion;tomato;oil;salt,eggs,10
+54,Peanut Chikki,476,12.5,55.0,24.0,3.5,veg,snack,Snack,peanuts;jaggery,peanuts,65
+55,Coconut Chutney,180,2.5,10.5,15.0,4.5,veg,breakfast|lunch|snack,Vegetable,coconut;green chilli;coriander;urad dal;oil,tree_nuts,10
+56,Moong Dal Soup,85,5.8,13.5,1.2,2.8,veg,lunch|dinner,Legume,moong dal;ginger;garlic;spices,none,32
+57,Vegetable Pulao,158,4.2,30.5,3.2,2.0,veg,lunch|dinner,Grain,basmati rice;mixed vegetables;ghee;spices,dairy,55
