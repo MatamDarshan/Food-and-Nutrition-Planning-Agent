@@ -178,9 +178,25 @@ def agent_node(state: AgentState) -> dict[str, Any]:
 
     # Assemble messages with SystemPrompt
     messages = [SystemMessage(content=SYSTEM_PROMPT)] + list(state.get("messages", []))
-    response = llm_with_tools.invoke(messages)
-
-    return {"messages": [response]}
+    try:
+        response = llm_with_tools.invoke(messages)
+        return {"messages": [response]}
+    except Exception as exc:
+        err_str = str(exc)
+        if "API_KEY_INVALID" in err_str or "API key not valid" in err_str:
+            friendly_msg = (
+                "⚠️ **Invalid Gemini API Key:** The provided API key was rejected by Google. "
+                "Please verify that you copied the complete key starting with `AIzaSy...` from "
+                "[Google AI Studio](https://aistudio.google.com/app/apikey) without extra spaces or quotes."
+            )
+        elif "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower():
+            friendly_msg = (
+                "⚠️ **API Quota Exceeded:** You have reached the request limit for the free tier. "
+                "Please wait 30–60 seconds before retrying."
+            )
+        else:
+            friendly_msg = f"⚠️ **Gemini API Error:** {err_str}"
+        return {"messages": [AIMessage(content=friendly_msg)]}
 
 
 # ── Node 5: Meal Plan Validation ──────────────────────────────────────────────

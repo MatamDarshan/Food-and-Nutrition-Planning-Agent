@@ -56,7 +56,11 @@ class Settings(BaseSettings):
 
     @property
     def api_key(self) -> str:
-        """Return the effective API key (either GEMINI_API_KEY or GOOGLE_API_KEY)."""
-        return self.gemini_api_key or self.google_api_key
+        """Return the effective API key, ignoring placeholder values."""
+        key = (self.gemini_api_key or self.google_api_key or "").strip()
+        # Filter out placeholder strings
+        if key in ("your_gemini_api_key_here", "your_api_key_here", "AIzaSy..."):
+            return ""
+        return key
 
 settings = Settings()

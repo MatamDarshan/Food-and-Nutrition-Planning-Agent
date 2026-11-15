@@ -114,12 +114,19 @@ with st.sidebar:
             value=settings.api_key,
             type="password",
             placeholder="AIzaSy...",
-            help="Your Google Gemini API Key. Can also be set in .env file.",
+            help="Paste your Google Gemini API Key starting with AIzaSy. Can also be set in .env file.",
         )
-        if api_key_input:
-            os.environ["GEMINI_API_KEY"] = api_key_input
-            os.environ["GOOGLE_API_KEY"] = api_key_input
-            settings.gemini_api_key = api_key_input
+        cleaned_key = api_key_input.strip().strip("'\"") if api_key_input else ""
+        if cleaned_key and cleaned_key != "your_gemini_api_key_here":
+            os.environ["GEMINI_API_KEY"] = cleaned_key
+            # Keep GOOGLE_API_KEY in sync and avoid warnings
+            os.environ["GOOGLE_API_KEY"] = cleaned_key
+            settings.gemini_api_key = cleaned_key
+        elif not cleaned_key:
+            # If empty, clear so offline fallback works
+            settings.gemini_api_key = ""
+            os.environ.pop("GEMINI_API_KEY", None)
+            os.environ.pop("GOOGLE_API_KEY", None)
 
         st.caption(f"Model: `{settings.model_name}`")
         st.caption(f"Max Revisions: `{settings.max_revisions}`")
