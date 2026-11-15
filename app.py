@@ -169,6 +169,7 @@ st.markdown(
     <span class="badge badge-primary">⚡ Google Gemini 2.0 Flash</span>
     <span class="badge badge-success">🧠 LangGraph 7-Node Architecture</span>
     <span class="badge badge-warning">🍛 ICMR-NIN Indian Food Dataset (57 items)</span>
+    <span class="badge badge-primary">🔍 Local RAG (FAISS + MiniLM-L6-v2)</span>
     """,
     unsafe_allow_html=True,
 )
@@ -253,7 +254,8 @@ with tab_about:
         """
         The **AI-Based Food & Nutrition Planning Agent** operates via a 7-stage workflow combining:
         - **Biometrics & Energy Math**: Mifflin-St Jeor formula for BMR, adjusted for Physical Activity Level (PAL) and fitness goals.
-        - **5 Python Tools**: Direct computation, vectorised food search, macro math, cosine similarity substitutions, and constraint verification.
+        - **6 Specialized Tools**: Direct computation, vectorised food search, macro math, cosine similarity substitutions, deterministic constraint verification, and local RAG nutrition document retrieval.
+        - **Retrieval-Augmented Generation (RAG)**: Dense vector similarity search over authoritative ICMR-NIN dietary guidelines using local HuggingFace embeddings (`all-MiniLM-L6-v2`) and a persistent FAISS index.
         - **Gemini 2.0 Flash + LangGraph**: Agentic decision-making, autonomous tool invocation, and self-correction loop.
         - **Self-Healing Loop**: If a proposed meal plan violates calorie limits (±15%), contains forbidden allergens, or violates diet types, the **Plan Revision** node detects issues and prompts the agent to correct itself (maximum 2 retries).
         """

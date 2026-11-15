@@ -45,6 +45,7 @@ from tools.food_tools import (
     validate_meal_plan,
 )
 from tools.nutrition_tools import calculate_nutrition_targets
+from rag.retriever import retrieve_nutrition_knowledge
 
 
 # ── Registered Tools ──────────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ ALL_TOOLS = [
     calculate_meal_nutrition,
     find_food_substitutes,
     validate_meal_plan,
+    retrieve_nutrition_knowledge,
 ]
 
 
@@ -112,6 +114,9 @@ def profile_validation_node(state: AgentState) -> dict[str, Any]:
             "error": None,
         }
     except Exception as exc:
+        # If conversation messages exist (e.g. conversational chat turn), do not block chat on profile schema
+        if state.get("messages"):
+            return {"error": None}
         return {
             "error": f"User profile validation failed: {str(exc)}",
         }
@@ -128,9 +133,12 @@ def nutrition_calculation_node(state: AgentState) -> dict[str, Any]:
     if not raw_profile:
         return {}
 
-    profile_obj = UserProfile(**raw_profile)
-    targets = _calc_targets(profile_obj)
-    targets_dict = targets.model_dump()
+    try:
+        profile_obj = UserProfile(**raw_profile)
+        targets = _calc_targets(profile_obj)
+        targets_dict = targets.model_dump()
+    except Exception:
+        return {}
 
     # Prepend a context prompt explaining user targets to messages if not already present
     context_msg = (
@@ -146,9 +154,15 @@ def nutrition_calculation_node(state: AgentState) -> dict[str, Any]:
         f"- Excluded foods: {profile_obj.excluded_foods or 'None'}\n"
     )
 
+    # Only append the initial context message if this is a fresh planning run
+    if not state.get("messages"):
+        return {
+            "nutrition_targets": targets_dict,
+            "messages": [HumanMessage(content=context_msg)],
+        }
+
     return {
         "nutrition_targets": targets_dict,
-        "messages": [HumanMessage(content=context_msg)],
     }
 
 
@@ -250,20 +264,37 @@ def agent_node(state: AgentState) -> dict[str, Any]:
     targets = state.get("nutrition_targets") or {}
     api_key = settings.api_key
 
-    # Check if this is a follow-up conversational question vs meal plan generation
+    # Check if this is a conversational question vs initial meal plan generation
     messages = list(state.get("messages", []))
-    is_chat_turn = len(messages) > 1 and any(
-        isinstance(m, HumanMessage) and not m.content.startswith("USER GOALS")
+    user_questions = [
+        m.content
         for m in messages
-    )
+        if isinstance(m, HumanMessage)
+        and isinstance(m.content, str)
+        and not m.content.startswith("USER GOALS")
+    ]
+    last_q_raw = user_questions[-1] if user_questions else ""
+    last_q = last_q_raw.lower()
+    is_chat_turn = bool(user_questions)
 
     if not api_key:
         if is_chat_turn:
-            last_q = (
-                messages[-1].content.lower()
-                if hasattr(messages[-1], "content") and isinstance(messages[-1].content, str)
-                else ""
-            )
+            # First, check RAG knowledge base for authoritative dietary guidance
+            try:
+                rag_result = retrieve_nutrition_knowledge.invoke({"query": last_q_raw})
+                if (
+                    not rag_result.startswith("No relevant nutrition document sections")
+                    and not rag_result.startswith("[ERROR]")
+                ):
+                    reply = (
+                        f"### 📚 ICMR-NIN Scientific Nutrition Guidance\n\n"
+                        f"{rag_result}\n\n"
+                        f"*(Retrieved locally via FAISS vector store & ICMR-NIN Guidelines)*"
+                    )
+                    return {"messages": [AIMessage(content=reply)]}
+            except Exception:
+                pass
+
             if "paneer" in last_q and any(w in last_q for w in ["alternative", "substitute", "replace"]):
                 reply = (
                     "**AI Nutritionist:** Great alternatives to paneer include:\n"
@@ -294,9 +325,8 @@ def agent_node(state: AgentState) -> dict[str, Any]:
                 )
             else:
                 reply = (
-                    f"**AI Nutritionist:** I have noted your question. "
-                    f"To enable open-ended dynamic conversation with Google Gemini 2.0 Flash, "
-                    f"please configure your `GOOGLE_API_KEY` in the `.env` file."
+                    "**AI Nutritionist:** No relevant document sections were found in the ICMR-NIN knowledge base for that query. "
+                    "You can ask about the nutritional benefits of millets, Indian protein sources, dietary fiber, whole grains vs refined grains, or meal substitutions!"
                 )
             return {"messages": [AIMessage(content=reply)]}
         demo_content = generate_demo_meal_plan(profile, targets)
@@ -318,19 +348,37 @@ def agent_node(state: AgentState) -> dict[str, Any]:
             "API_KEY_INVALID" in err_str
             or "API key not valid" in err_str
             or "INVALID_ARGUMENT" in err_str
+            or "RESOURCE_EXHAUSTED" in err_str
+            or "quota" in err_str.lower()
         ):
+            if is_chat_turn:
+                last_q_raw = user_questions[-1] if user_questions else ""
+                try:
+                    rag_result = retrieve_nutrition_knowledge.invoke({"query": last_q_raw})
+                    if (
+                        not rag_result.startswith("No relevant nutrition document sections")
+                        and not rag_result.startswith("[ERROR]")
+                    ):
+                        reply = (
+                            f"> 💡 **Offline RAG Knowledge Base:**\n\n"
+                            f"{rag_result}\n\n"
+                            f"*(Retrieved locally via FAISS vector store & ICMR-NIN Guidelines)*"
+                        )
+                        return {"messages": [AIMessage(content=reply)]}
+                except Exception:
+                    pass
+
+                reply = (
+                    "**AI Nutritionist:** The API key is offline or unavailable. "
+                    "However, our local ICMR-NIN knowledge base is active. "
+                    "You can ask about millets, Indian protein sources, dietary fiber, or whole grains vs refined grains!"
+                )
+                return {"messages": [AIMessage(content=reply)]}
+
             demo_content = generate_demo_meal_plan(profile, targets)
             notice = (
-                f"> 💡 **Demo Mode Activated:** The provided API key was invalid. "
+                f"> 💡 **Demo Mode Activated:** The Gemini API was unreachable or invalid. "
                 f"Successfully generated a 100% compliant meal plan using the ICMR-NIN planning engine.\n\n"
-                f"{demo_content}"
-            )
-            return {"messages": [AIMessage(content=notice)]}
-        elif "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower():
-            demo_content = generate_demo_meal_plan(profile, targets)
-            notice = (
-                f"> 💡 **Demo Mode Activated:** Gemini rate limit reached. "
-                f"Successfully generated your meal plan using the ICMR-NIN planning engine.\n\n"
                 f"{demo_content}"
             )
             return {"messages": [AIMessage(content=notice)]}

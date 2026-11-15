@@ -12,10 +12,10 @@ from agent.graph import app_graph, extract_meal_plan_json
 
 
 SUGGESTED_PROMPTS = [
-    "Suggest an alternative to paneer for lunch.",
-    "Give me another healthy vegetarian breakfast option.",
-    "Why did you recommend this food combination?",
-    "How can I increase the protein content of my dinner?",
+    "What are the nutritional benefits of millets?",
+    "Which Indian foods are good sources of protein?",
+    "Explain the importance of dietary fibre.",
+    "What are the differences between whole grains and refined grains?",
 ]
 
 
