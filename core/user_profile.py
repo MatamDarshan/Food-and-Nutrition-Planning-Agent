@@ -53,9 +53,9 @@ class UserProfile(BaseModel):
     )
     age: int = Field(
         ...,
-        ge=10,
+        ge=18,
         le=100,
-        description="Age in years (10–100)",
+        description="Age in years (18–100 for healthy adults)",
     )
     gender: Gender = Field(
         ...,

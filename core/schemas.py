@@ -146,3 +146,78 @@ class ValidationResult(BaseModel):
     planned_protein: float
     planned_carbs: float
     planned_fats: float
+
+
+# ── 7-Day Structured Meal Plan Models ─────────────────────────────────────────
+
+class FoodItemDetail(BaseModel):
+    """Detailed food item with individual nutrition and portion serving."""
+
+    food_name: str
+    quantity_g: float = Field(..., description="Quantity in grams")
+    serving_display: str = Field(..., description="Household serving (e.g. '2 medium pieces (approx. 150g)')")
+    calories: float
+    protein: float
+    carbohydrates: float
+    fat: float
+    fiber: float
+    diet_type: str = "veg"
+    food_category: str = "General"
+    micronutrients: dict[str, Optional[float]] = Field(default_factory=dict)
+
+
+class MealDetail(BaseModel):
+    """Individual meal (Breakfast, Lunch, Snack, Dinner) with itemized food & totals."""
+
+    meal_name: str
+    label: str = Field(..., description="Display label (e.g. 'Breakfast')")
+    items: list[FoodItemDetail] = Field(default_factory=list)
+    total_calories: float = 0.0
+    total_protein: float = 0.0
+    total_carbs: float = 0.0
+    total_fat: float = 0.0
+    total_fiber: float = 0.0
+    micronutrients: dict[str, Optional[float]] = Field(default_factory=dict)
+
+
+class DayPlanDetail(BaseModel):
+    """One day of the 7-day plan containing 4 meals and daily totals."""
+
+    day_name: str = Field(..., description="Monday, Tuesday, etc.")
+    meals: dict[str, MealDetail] = Field(default_factory=dict)
+    total_calories: float = 0.0
+    total_protein: float = 0.0
+    total_carbs: float = 0.0
+    total_fat: float = 0.0
+    total_fiber: float = 0.0
+    micronutrients: dict[str, Optional[float]] = Field(default_factory=dict)
+    calorie_deviation_pct: float = 0.0
+
+
+class WeeklyAverages(BaseModel):
+    """Calculated weekly averages and target comparison metrics."""
+
+    avg_calories: float
+    avg_protein: float
+    avg_carbs: float
+    avg_fat: float
+    avg_fiber: float
+    target_calories: float
+    target_protein: float
+    target_carbs: float
+    target_fat: float
+    target_fiber: float
+    calorie_compliance: bool = True
+    daily_calories: dict[str, float] = Field(default_factory=dict)
+
+
+class WeeklyPlan(BaseModel):
+    """Complete 7-day personalized Indian nutrition plan."""
+
+    user_targets: NutritionTargets
+    days: list[DayPlanDetail] = Field(default_factory=list)
+    weekly_averages: WeeklyAverages
+    rationale: str = ""
+    validation_result: Optional[ValidationResult] = None
+    source_references: list[str] = Field(default_factory=list)
+

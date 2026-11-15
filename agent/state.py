@@ -23,8 +23,11 @@ class AgentState(TypedDict):
     nutrition_targets: Optional[dict[str, Any]]
 
     # Generated meal plan dictionary:
-    # {"breakfast": [...], "lunch": [...], "snack": [...], "dinner": [...]}
+    # {"breakfast": [...], ...} or {"monday": {...}, "tuesday": {...}, ...}
     meal_plan: Optional[dict[str, Any]]
+
+    # Fully structured 7-day WeeklyPlan object dictionary
+    weekly_plan: Optional[dict[str, Any]]
 
     # Validation outcome from core/validation.py
     validation_result: Optional[dict[str, Any]]

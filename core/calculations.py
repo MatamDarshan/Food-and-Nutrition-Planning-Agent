@@ -25,7 +25,20 @@ Fibre   : 14 g per 1000 kcal (US DRI standard)
 
 from __future__ import annotations
 
-from core.schemas import NutritionTargets
+from core.schemas import (
+    NutritionTargets,
+    FoodItemDetail,
+    MealDetail,
+    DayPlanDetail,
+    WeeklyAverages,
+    WeeklyPlan,
+)
+from data.micronutrient_data import (
+    get_food_micronutrients,
+    aggregate_micronutrients,
+    HOUSEHOLD_SERVINGS,
+)
+import pandas as pd
 from core.user_profile import UserProfile
 
 
@@ -195,3 +208,222 @@ def calculate_nutrition_targets(profile: UserProfile) -> NutritionTargets:
         fats_g=fat_g,
         fiber_g=fiber_g,
     )
+
+
+# ── 7-Day Meal Plan Mathematical Constructors ─────────────────────────────────
+
+MEAL_LABELS: dict[str, str] = {
+    "breakfast": "Breakfast",
+    "lunch": "Lunch",
+    "snack": "Evening Snack",
+    "dinner": "Dinner",
+}
+
+DAYS_OF_WEEK: list[str] = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+]
+
+
+def build_food_item_detail(
+    food_name: str,
+    quantity_g: float,
+    food_df: pd.DataFrame,
+) -> FoodItemDetail:
+    """Compute food-level nutritional values and format serving description."""
+    match = food_df[food_df["food_name"] == food_name]
+    if match.empty:
+        # Fallback if unknown
+        return FoodItemDetail(
+            food_name=food_name,
+            quantity_g=quantity_g,
+            serving_display=f"{quantity_g:.0f} g",
+            calories=0.0,
+            protein=0.0,
+            carbohydrates=0.0,
+            fat=0.0,
+            fiber=0.0,
+            diet_type="veg",
+            food_category="General",
+            micronutrients={},
+        )
+
+    row = match.iloc[0]
+    scale = quantity_g / 100.0 if quantity_g > 0 else 0.0
+
+    cal = round(float(row["calories"]) * scale, 1)
+    prot = round(float(row["protein"]) * scale, 1)
+    carb = round(float(row["carbohydrates"]) * scale, 1)
+    fat = round(float(row["fats"]) * scale, 1)
+    fib = round(float(row["fiber"]) * scale, 1)
+
+    serving_hint = HOUSEHOLD_SERVINGS.get(food_name, "")
+    if serving_hint:
+        serving_display = f"{quantity_g:.0f} g ({serving_hint})"
+    else:
+        serving_display = f"{quantity_g:.0f} g"
+
+    micros = get_food_micronutrients(food_name, quantity_g)
+
+    return FoodItemDetail(
+        food_name=food_name,
+        quantity_g=quantity_g,
+        serving_display=serving_display,
+        calories=cal,
+        protein=prot,
+        carbohydrates=carb,
+        fat=fat,
+        fiber=fib,
+        diet_type=str(row.get("diet_type", "veg")),
+        food_category=str(row.get("food_category", "General")),
+        micronutrients=micros,
+    )
+
+
+def build_meal_detail(
+    meal_name: str,
+    items_raw: list[dict],
+    food_df: pd.DataFrame,
+) -> MealDetail:
+    """Build a MealDetail by summing all included food items."""
+    food_items: list[FoodItemDetail] = []
+    tot_cal = 0.0
+    tot_prot = 0.0
+    tot_carb = 0.0
+    tot_fat = 0.0
+    tot_fib = 0.0
+
+    for item in items_raw:
+        fname = item.get("food_name", "")
+        qty = float(item.get("quantity_g", 0.0))
+        detail = build_food_item_detail(fname, qty, food_df)
+        food_items.append(detail)
+        tot_cal += detail.calories
+        tot_prot += detail.protein
+        tot_carb += detail.carbohydrates
+        tot_fat += detail.fat
+        tot_fib += detail.fiber
+
+    # Aggregate micronutrients
+    meal_micros = aggregate_micronutrients(items_raw)
+
+    label = MEAL_LABELS.get(meal_name.lower(), meal_name.title())
+
+    return MealDetail(
+        meal_name=meal_name.lower(),
+        label=label,
+        items=food_items,
+        total_calories=round(tot_cal, 1),
+        total_protein=round(tot_prot, 1),
+        total_carbs=round(tot_carb, 1),
+        total_fat=round(tot_fat, 1),
+        total_fiber=round(tot_fib, 1),
+        micronutrients=meal_micros,
+    )
+
+
+def build_day_plan_detail(
+    day_name: str,
+    meals_dict: dict[str, list[dict]],
+    food_df: pd.DataFrame,
+    target_calories: float = 2000.0,
+) -> DayPlanDetail:
+    """Build a DayPlanDetail by summing all 4 meals."""
+    meals: dict[str, MealDetail] = {}
+    day_cal = 0.0
+    day_prot = 0.0
+    day_carb = 0.0
+    day_fat = 0.0
+    day_fib = 0.0
+
+    all_day_items: list[dict] = []
+
+    for slot in ["breakfast", "lunch", "snack", "dinner"]:
+        raw_items = meals_dict.get(slot, [])
+        all_day_items.extend(raw_items)
+        md = build_meal_detail(slot, raw_items, food_df)
+        meals[slot] = md
+        day_cal += md.total_calories
+        day_prot += md.total_protein
+        day_carb += md.total_carbs
+        day_fat += md.total_fat
+        day_fib += md.total_fiber
+
+    day_micros = aggregate_micronutrients(all_day_items)
+
+    dev_pct = 0.0
+    if target_calories > 0:
+        dev_pct = round(((day_cal - target_calories) / target_calories) * 100.0, 1)
+
+    return DayPlanDetail(
+        day_name=day_name,
+        meals=meals,
+        total_calories=round(day_cal, 1),
+        total_protein=round(day_prot, 1),
+        total_carbs=round(day_carb, 1),
+        total_fat=round(day_fat, 1),
+        total_fiber=round(day_fib, 1),
+        micronutrients=day_micros,
+        calorie_deviation_pct=dev_pct,
+    )
+
+
+def calculate_weekly_averages(
+    days: list[DayPlanDetail],
+    targets: NutritionTargets,
+) -> WeeklyAverages:
+    """Calculate average daily calories, protein, carbs, fat, fibre and target compliance."""
+    if not days:
+        return WeeklyAverages(
+            avg_calories=0.0,
+            avg_protein=0.0,
+            avg_carbs=0.0,
+            avg_fat=0.0,
+            avg_fiber=0.0,
+            target_calories=targets.calorie_target,
+            target_protein=targets.protein_g,
+            target_carbs=targets.carbs_g,
+            target_fat=targets.fats_g,
+            target_fiber=targets.fiber_g,
+            calorie_compliance=False,
+            daily_calories={},
+        )
+
+    n = len(days)
+    sum_cal = sum(d.total_calories for d in days)
+    sum_prot = sum(d.total_protein for d in days)
+    sum_carb = sum(d.total_carbs for d in days)
+    sum_fat = sum(d.total_fat for d in days)
+    sum_fib = sum(d.total_fiber for d in days)
+
+    avg_cal = round(sum_cal / n, 1)
+    avg_prot = round(sum_prot / n, 1)
+    avg_carb = round(sum_carb / n, 1)
+    avg_fat = round(sum_fat / n, 1)
+    avg_fib = round(sum_fib / n, 1)
+
+    dev_from_target = abs(avg_cal - targets.calorie_target) / targets.calorie_target
+    compliant = dev_from_target <= 0.15
+
+    daily_cals = {d.day_name: d.total_calories for d in days}
+
+    return WeeklyAverages(
+        avg_calories=avg_cal,
+        avg_protein=avg_prot,
+        avg_carbs=avg_carb,
+        avg_fat=avg_fat,
+        avg_fiber=avg_fib,
+        target_calories=targets.calorie_target,
+        target_protein=targets.protein_g,
+        target_carbs=targets.carbs_g,
+        target_fat=targets.fats_g,
+        target_fiber=targets.fiber_g,
+        calorie_compliance=compliant,
+        daily_calories=daily_cals,
+    )
+

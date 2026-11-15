@@ -4,14 +4,16 @@ app.py
 AI-Based Food and Nutrition Planning Agent
 Main Streamlit Application Entry Point.
 
-Combines:
-- Streamlit Web Interface
-- Pydantic User Profile Validation
-- Mifflin-St Jeor & TDEE Calculations
-- 5 Python Tools
-- Google Gemini 2.0 Flash Reasoning
-- LangGraph 7-Node Agent Workflow
-- ICMR-NIN Indian Food Composition Database
+Architecture:
+- Page 1: User Profile & Goals
+- Page 2: Nutrition Dashboard
+- Page 3: 7-Day Meal Planner
+- Page 4: Food Database Explorer
+- Page 5: AI Nutritionist Chat Assistant
+
+Technologies:
+- Python 3.10+, Streamlit, LangGraph, Gemini 2.0 Flash, FAISS, HuggingFace embeddings
+- ICMR-NIN Indian Food Composition Tables (IFCT 2017) & RDA 2020
 """
 
 import os
@@ -26,50 +28,23 @@ from core.user_profile import UserProfile
 from tools.food_tools import _get_df
 from ui.chat_interface import render_chat_interface
 from ui.dashboard import render_nutrition_dashboard
+from ui.food_database import render_food_database_page
+from ui.meal_planner import render_7day_meal_planner
 from ui.profile_form import render_profile_form
+from ui.styles import THEME_CSS
 
 
 # ── Page Configuration ────────────────────────────────────────────────────────
 
 st.set_page_config(
     page_title="AI Food & Nutrition Planning Agent",
-    page_icon="🥗",
+    page_icon="🌿",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ── Custom CSS for Polished Look ──────────────────────────────────────────────
-
-st.markdown(
-    """
-    <style>
-    .main-title {
-        font-size: 2.2rem;
-        font-weight: 700;
-        color: #1E3A8A;
-        margin-bottom: 0.2rem;
-    }
-    .sub-title {
-        font-size: 1.05rem;
-        color: #4B5563;
-        margin-bottom: 1.5rem;
-    }
-    .badge {
-        display: inline-block;
-        padding: 0.25rem 0.6rem;
-        font-size: 0.8rem;
-        font-weight: 600;
-        border-radius: 9999px;
-        margin-right: 0.5rem;
-        margin-bottom: 0.5rem;
-    }
-    .badge-primary { background-color: #E0E7FF; color: #3730A3; }
-    .badge-success { background-color: #D1FAE5; color: #065F46; }
-    .badge-warning { background-color: #FEF3C7; color: #92400E; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# Apply Modern Theme CSS
+st.markdown(THEME_CSS, unsafe_allow_html=True)
 
 
 # ── Session State Initialization ──────────────────────────────────────────────
@@ -77,8 +52,10 @@ st.markdown(
 def _init_session_state() -> None:
     defaults = {
         "thread_id": str(uuid.uuid4()),
+        "active_nav": "🍱 7-Day Meal Planner",
         "user_profile": None,
         "nutrition_targets": None,
+        "weekly_plan": None,
         "meal_plan": None,
         "validation_result": None,
         "agent_explanation": "",
@@ -93,194 +70,199 @@ def _init_session_state() -> None:
 _init_session_state()
 
 
-# ── Cached Food Dataset Loader ────────────────────────────────────────────────
+# ── Auto-Initialize Default Profile & Plan for Seamless First Impression ─────
 
-@st.cache_data
-def load_cached_food_data() -> pd.DataFrame:
-    """Load food database once and cache in Streamlit memory."""
-    return _get_df()
+def _ensure_initial_plan() -> None:
+    """Provide an initial default plan so the user immediately sees a rich 7-day dashboard."""
+    if st.session_state.get("weekly_plan") is None and st.session_state.get("user_profile") is None:
+        default_profile = {
+            "name": "Arjun",
+            "age": 28,
+            "gender": "male",
+            "height_cm": 175.0,
+            "weight_kg": 75.0,
+            "activity_level": "moderately_active",
+            "fitness_goal": "weight_loss",
+            "diet_type": "veg",
+            "allergies": [],
+            "excluded_foods": [],
+        }
+        try:
+            p_obj = UserProfile(**default_profile)
+            targets_obj = calculate_nutrition_targets(p_obj)
+            st.session_state.user_profile = default_profile
+            st.session_state.nutrition_targets = targets_obj.model_dump()
+
+            config = {"configurable": {"thread_id": st.session_state.thread_id}}
+            init_state = {
+                "user_profile": default_profile,
+                "nutrition_targets": st.session_state.nutrition_targets,
+                "messages": [],
+                "revision_count": 0,
+            }
+            res = app_graph.invoke(init_state, config=config)
+            if res.get("weekly_plan"):
+                st.session_state.weekly_plan = res["weekly_plan"]
+            if res.get("meal_plan"):
+                st.session_state.meal_plan = res["meal_plan"]
+            if res.get("validation_result"):
+                st.session_state.validation_result = res["validation_result"]
+            if res.get("final_response"):
+                st.session_state.agent_explanation = res["final_response"]
+        except Exception:
+            pass
+
+_ensure_initial_plan()
 
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+# ── Sidebar Navigation & Branding ─────────────────────────────────────────────
 
 with st.sidebar:
-    st.markdown("## 🥗 AI Food Planner")
-    st.caption("Personalized Indian Nutrition using Agentic AI")
-    st.caption(f"⚡ Reasoning Engine: `{settings.model_name}`")
+    st.markdown("## 🌿 AI Food Planner")
+    st.caption("Personalized Indian Nutrition & 7-Day Planning")
 
-    # Render User Profile Form
+    # Engine status pill
+    if settings.api_key:
+        st.markdown(
+            f"""
+            <div style="background-color: #D8F3DC; border: 1px solid #74C69D; border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.78rem; color: #1B4332; margin-bottom: 0.8rem;">
+                ⚡ <strong>Active Engine:</strong> Google Gemini 2.0 Flash
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f"""
+            <div style="background-color: #FEF3C7; border: 1px solid #FCD34D; border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.78rem; color: #92400E; margin-bottom: 0.8rem;">
+                💡 <strong>Offline Planner Active:</strong> ICMR-NIN Planning Engine
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # Clean Navigation Radio
+    nav_options = [
+        "🍱 7-Day Meal Planner",
+        "📊 Nutrition Dashboard",
+        "👤 User Profile",
+        "🔍 Food Database",
+        "💬 AI Nutritionist Chat",
+    ]
+
+    current_nav = st.session_state.get("active_nav", "🍱 7-Day Meal Planner")
+    if current_nav not in nav_options:
+        current_nav = "🍱 7-Day Meal Planner"
+
+    selected_nav = st.radio(
+        "Navigation Menu",
+        options=nav_options,
+        index=nav_options.index(current_nav),
+        label_visibility="collapsed",
+    )
+    st.session_state.active_nav = selected_nav
+
+    st.divider()
+
+    # Active Profile Summary Widget
+    prof = st.session_state.get("user_profile")
+    if prof:
+        st.markdown("##### 👤 Current User")
+        st.markdown(f"**Name:** {prof.get('name', 'Arjun')}")
+        st.markdown(f"**Diet:** {prof.get('diet_type', 'veg').upper()}")
+        st.markdown(f"**Goal:** {prof.get('fitness_goal', 'weight_loss').replace('_', ' ').title()}")
+        allergies_list = prof.get("allergies", [])
+        if allergies_list:
+            st.markdown(f"**Allergies:** {', '.join(allergies_list)}")
+        excluded_list = prof.get("excluded_foods", [])
+        if excluded_list:
+            st.markdown(f"**Excluded:** {', '.join(excluded_list)}")
+
+    st.divider()
+    st.markdown("##### 📚 Reference Standard")
+    st.caption("Indian Food Composition Tables (IFCT 2017) & Recommended Dietary Allowances (RDA 2020) — ICMR-NIN, Hyderabad.")
+
+
+# ── Main Content Header ───────────────────────────────────────────────────────
+
+st.markdown(
+    """
+    <div style="margin-bottom: 1.25rem;">
+        <h2 style="margin: 0; color: #1B4332; font-weight: 700;">🌿 AI-Based Food and Nutrition Planning Agent</h2>
+        <p style="margin-top: 0.25rem; font-size: 0.95rem; color: #4B5563;">
+            Autonomous Agentic AI that computes personalized biometric energy requirements, searches curated Indian foods,
+            assembles balanced 7-day meal plans, and deterministicly verifies dietary safety.
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ── Page Routing ──────────────────────────────────────────────────────────────
+
+active_page = st.session_state.active_nav
+
+if active_page == "👤 User Profile":
+    st.markdown("### 👤 User Profile & Goal Configuration")
     profile_data = render_profile_form()
 
     if profile_data:
-        # Trigger Meal Plan Generation Workflow
-        with st.spinner("🤖 Agent is analyzing targets and generating meal plan..."):
+        with st.spinner("🤖 AI Agent is computing biometric energy targets and assembling a 7-day meal plan..."):
             try:
-                # Update session thread
                 st.session_state.thread_id = str(uuid.uuid4())
                 st.session_state.user_profile = profile_data
 
-                # Precompute targets immediately for fast dashboard render
+                # Precompute targets
                 p_obj = UserProfile(**profile_data)
                 targets_obj = calculate_nutrition_targets(p_obj)
                 st.session_state.nutrition_targets = targets_obj.model_dump()
 
                 # Run LangGraph Workflow
                 config = {"configurable": {"thread_id": st.session_state.thread_id}}
-                initial_state = {
+                init_state = {
                     "user_profile": profile_data,
+                    "nutrition_targets": st.session_state.nutrition_targets,
                     "messages": [],
                     "revision_count": 0,
                 }
-                result = app_graph.invoke(initial_state, config=config)
+                res = app_graph.invoke(init_state, config=config)
 
-                # Store outputs in state
-                if result.get("nutrition_targets"):
-                    st.session_state.nutrition_targets = result["nutrition_targets"]
-                if result.get("meal_plan"):
-                    st.session_state.meal_plan = result["meal_plan"]
-                if result.get("validation_result"):
-                    st.session_state.validation_result = result["validation_result"]
-                if result.get("final_response"):
-                    st.session_state.agent_explanation = result["final_response"]
+                if res.get("weekly_plan"):
+                    st.session_state.weekly_plan = res["weekly_plan"]
+                if res.get("meal_plan"):
+                    st.session_state.meal_plan = res["meal_plan"]
+                if res.get("validation_result"):
+                    st.session_state.validation_result = res["validation_result"]
+                if res.get("final_response"):
+                    st.session_state.agent_explanation = res["final_response"]
 
-                st.success("🎉 Personalized meal plan generated!")
+                st.session_state.active_nav = "🍱 7-Day Meal Planner"
+                st.rerun()
             except Exception as e:
-                st.error(f"Error during agent execution: {e}")
+                st.error(f"Error during plan generation: {e}")
 
-    st.divider()
-    st.markdown("### 📚 Data Source")
-    st.caption("Indian Food Composition Tables (IFCT) — ICMR-National Institute of Nutrition (NIN).")
+elif active_page == "📊 Nutrition Dashboard":
+    render_nutrition_dashboard(
+        targets=st.session_state.get("nutrition_targets"),
+        meal_plan=st.session_state.get("meal_plan"),
+        validation_result=st.session_state.get("validation_result"),
+    )
 
+elif active_page == "🍱 7-Day Meal Planner":
+    render_7day_meal_planner(
+        weekly_plan=st.session_state.get("weekly_plan"),
+        targets=st.session_state.get("nutrition_targets"),
+        validation_result=st.session_state.get("validation_result"),
+    )
 
-# ── Main Content Area ─────────────────────────────────────────────────────────
+elif active_page == "🔍 Food Database":
+    render_food_database_page()
 
-st.markdown('<div class="main-title">🥗 AI-Based Food & Nutrition Planning Agent</div>', unsafe_allow_html=True)
-st.markdown(
-    '<div class="sub-title">'
-    'Autonomous Agentic AI that calculates precise caloric targets, searches curated Indian foods, '
-    'assembles 4-meal daily plans, and self-validates dietary compliance.'
-    '</div>',
-    unsafe_allow_html=True,
-)
-
-# Badges
-st.markdown(
-    """
-    <span class="badge badge-primary">⚡ Google Gemini 2.0 Flash</span>
-    <span class="badge badge-success">🧠 LangGraph 7-Node Architecture</span>
-    <span class="badge badge-warning">🍛 ICMR-NIN Indian Food Dataset (57 items)</span>
-    <span class="badge badge-primary">🔍 Local RAG (FAISS + MiniLM-L6-v2)</span>
-    """,
-    unsafe_allow_html=True,
-)
-
-# Tab Navigation
-tab_plan, tab_chat, tab_data, tab_about = st.tabs(
-    ["🍱 Meal Plan & Dashboard", "💬 AI Nutritionist Chat", "🔍 Food Database", "⚙️ System Architecture"]
-)
-
-# ── Tab 1: Meal Plan & Dashboard ──────────────────────────────────────────────
-with tab_plan:
-    if st.session_state.get("nutrition_targets"):
-        render_nutrition_dashboard(
-            targets=st.session_state.get("nutrition_targets"),
-            meal_plan=st.session_state.get("meal_plan"),
-            validation_result=st.session_state.get("validation_result"),
-        )
-
-        if st.session_state.get("agent_explanation"):
-            st.divider()
-            st.markdown("### 📝 AI Nutritionist Rationale & Advice")
-            st.markdown(st.session_state.get("agent_explanation"))
-    else:
-        st.info("👈 Please fill out your profile in the sidebar and click **'Generate Meal Plan'** to begin.")
-        # Show sample preview with default calculation
-        sample_p = UserProfile(
-            name="Sample",
-            age=28,
-            gender="male",
-            height_cm=175.0,
-            weight_kg=75.0,
-            activity_level="moderately_active",
-            fitness_goal="weight_loss",
-            diet_type="veg",
-        )
-        sample_targets = calculate_nutrition_targets(sample_p).model_dump()
-        st.markdown("#### Sample Preview (28y Male, 75kg, Moderately Active, Weight Loss):")
-        render_nutrition_dashboard(targets=sample_targets)
-
-# ── Tab 2: AI Nutritionist Chat ───────────────────────────────────────────────
-with tab_chat:
+elif active_page == "💬 AI Nutritionist Chat":
     render_chat_interface(
         thread_id=st.session_state.get("thread_id", ""),
         user_profile=st.session_state.get("user_profile"),
         nutrition_targets=st.session_state.get("nutrition_targets"),
-    )
-
-# ── Tab 3: Food Database Explorer ─────────────────────────────────────────────
-with tab_data:
-    st.markdown("### 🔍 Indian Food Database (ICMR-NIN Curated)")
-    st.caption("Explore nutritional information per 100g for all 57 verified Indian food items.")
-
-    df_all = load_cached_food_data()
-
-    col_f1, col_f2, col_f3 = st.columns(3)
-    with col_f1:
-        search_query = st.text_input("Filter by Food Name", "")
-    with col_f2:
-        diet_filter = st.selectbox("Diet Type", ["all", "veg", "non-veg"])
-    with col_f3:
-        cat_filter = st.selectbox("Category", ["all"] + sorted(df_all["food_category"].unique().tolist()))
-
-    filtered_df = df_all.copy()
-    if search_query:
-        filtered_df = filtered_df[filtered_df["food_name"].str.contains(search_query, case=False, na=False)]
-    if diet_filter != "all":
-        filtered_df = filtered_df[filtered_df["diet_type"] == diet_filter]
-    if cat_filter != "all":
-        filtered_df = filtered_df[filtered_df["food_category"] == cat_filter]
-
-    st.dataframe(
-        filtered_df,
-        use_container_width=True,
-        hide_index=True,
-    )
-    st.caption(f"Showing {len(filtered_df)} of {len(df_all)} food items.")
-
-# ── Tab 4: System Architecture ────────────────────────────────────────────────
-with tab_about:
-    st.markdown("### ⚙️ System Architecture & Workflow")
-    st.markdown(
-        """
-        The **AI-Based Food & Nutrition Planning Agent** operates via a 7-stage workflow combining:
-        - **Biometrics & Energy Math**: Mifflin-St Jeor formula for BMR, adjusted for Physical Activity Level (PAL) and fitness goals.
-        - **6 Specialized Tools**: Direct computation, vectorised food search, macro math, cosine similarity substitutions, deterministic constraint verification, and local RAG nutrition document retrieval.
-        - **Retrieval-Augmented Generation (RAG)**: Dense vector similarity search over authoritative ICMR-NIN dietary guidelines using local HuggingFace embeddings (`all-MiniLM-L6-v2`) and a persistent FAISS index.
-        - **Gemini 2.0 Flash + LangGraph**: Agentic decision-making, autonomous tool invocation, and self-correction loop.
-        - **Self-Healing Loop**: If a proposed meal plan violates calorie limits (±15%), contains forbidden allergens, or violates diet types, the **Plan Revision** node detects issues and prompts the agent to correct itself (maximum 2 retries).
-        """
-    )
-    st.code(
-        """
-User Profile Form (Streamlit)
-        │
-        ▼
-Profile Validation Node (Pydantic v2)
-        │
-        ▼
-Nutrition Calculation Node (Mifflin-St Jeor & TDEE)
-        │
-        ▼
-Gemini 2.0 Flash Agent ◄────────────────┐
-        │                               │
-        ├──────(calls tool)─────► Tool Execution (5 Tools)
-        │
-        ▼
-Meal Plan Validation Node (Deterministic Rule Engine)
-        │
-        ├──────(Pass)───────────────────► Final Response ──► Streamlit UI
-        │
-        └──────(Fail, retries < 2)──────► Plan Revision Node ──► Agent
-        """,
-        language="text",
+        weekly_plan=st.session_state.get("weekly_plan"),
     )

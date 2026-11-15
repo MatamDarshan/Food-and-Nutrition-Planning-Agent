@@ -1,34 +1,36 @@
 """
 ui/chat_interface.py
 --------------------
-Interactive Streamlit chat assistant powered by Gemini and LangGraph.
-Allows multi-turn Q&A, dietary questions, and on-the-fly meal adjustments.
+Page 5: Modern AI Nutritionist Chat Assistant powered by Gemini, LangGraph, and RAG.
+Context-aware of user profile, allergies, and generated meal plan.
 """
 
 from typing import Any, Optional
 import streamlit as st
 from langchain_core.messages import HumanMessage
-from agent.graph import app_graph, extract_meal_plan_json
+from agent.graph import app_graph
 
 
 SUGGESTED_PROMPTS = [
+    "Why did you recommend this meal?",
+    "Suggest an alternative for lunch.",
+    "Replace rice with another food.",
+    "Give me a high-protein vegetarian breakfast.",
+    "Explain my daily nutritional breakdown.",
     "What are the nutritional benefits of millets?",
-    "Which Indian foods are good sources of protein?",
-    "Explain the importance of dietary fibre.",
-    "What are the differences between whole grains and refined grains?",
 ]
 
 
 def _get_chat_history() -> list[dict[str, str]]:
-    """Retrieve chat history safely across streamlit and non-interactive contexts."""
+    """Retrieve chat history safely across streamlit contexts."""
     history = getattr(st.session_state, "chat_history", None)
     if history is None:
         default_history = [
             {
                 "role": "assistant",
                 "content": (
-                    "Namaste! I am your AI Nutritionist. I have analyzed your profile and targets. "
-                    "Feel free to ask me to swap any meal, suggest alternatives, or explain the nutritional benefits!"
+                    "Namaste! I am your AI Nutritionist. I have analyzed your biometric profile, targets, and meal plan. "
+                    "Feel free to ask why specific meals were chosen, request recipe alternatives, or ask questions about Indian food nutrition!"
                 ),
             }
         ]
@@ -44,21 +46,39 @@ def render_chat_interface(
     thread_id: str,
     user_profile: Optional[dict[str, Any]] = None,
     nutrition_targets: Optional[dict[str, Any]] = None,
+    weekly_plan: Optional[dict[str, Any]] = None,
 ) -> None:
     """Render the AI Nutritionist chat interface with session conversation memory."""
-    st.markdown("### 💬 Chat with your AI Nutritionist")
-    st.caption("Ask questions about your meal plan, request substitutions, or ask for dietary tips.")
+    st.markdown("### 💬 AI Nutritionist Consultation")
+    st.caption("Ask questions about your meal plan, request substitutions, or ask conceptual nutrition questions backed by ICMR-NIN science.")
+
+    # Context notice badge
+    p_name = user_profile.get("name", "User") if user_profile else "Guest"
+    p_diet = user_profile.get("diet_type", "veg").upper() if user_profile else "VEG"
+    allergies = user_profile.get("allergies", []) if user_profile else []
+    allergy_str = ", ".join(allergies) if allergies else "None"
+
+    st.markdown(
+        f"""
+        <div style="background-color: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 8px; padding: 0.6rem 0.9rem; font-size: 0.85rem; color: #166534; margin-bottom: 1rem;">
+            👤 <strong>Active Context:</strong> {p_name} | Diet: <strong>{p_diet}</strong> | Allergen Guard: <strong>{allergy_str}</strong>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     chat_history = _get_chat_history()
 
     # Quick prompt pills
-    st.markdown("**Quick questions:**")
-    q_cols = st.columns(len(SUGGESTED_PROMPTS))
+    st.markdown("**Suggested questions:**")
+    q_cols = st.columns(3)
     selected_quick_prompt = None
     for idx, prompt in enumerate(SUGGESTED_PROMPTS):
-        with q_cols[idx]:
+        with q_cols[idx % 3]:
             if st.button(prompt, key=f"quick_prompt_{idx}", use_container_width=True):
                 selected_quick_prompt = prompt
+
+    st.divider()
 
     # Render previous messages
     for msg in chat_history:
@@ -66,7 +86,7 @@ def render_chat_interface(
             st.markdown(msg["content"])
 
     # Chat input
-    user_input = st.chat_input("Ask a question (e.g. 'Substitute brown rice for basmati rice')...")
+    user_input = st.chat_input("Ask a question (e.g. 'Why did you recommend this meal?', 'Suggest an alternative for lunch')...")
     prompt_to_send = selected_quick_prompt or user_input
 
     if prompt_to_send:
@@ -82,7 +102,7 @@ def render_chat_interface(
 
         # Send to LangGraph Agent
         with st.chat_message("assistant"):
-            with st.spinner("AI Nutritionist is thinking..."):
+            with st.spinner("AI Nutritionist is analyzing nutrition science and guidelines..."):
                 try:
                     config = {"configurable": {"thread_id": thread_id}}
                     input_state = {
@@ -94,7 +114,6 @@ def render_chat_interface(
 
                     response_text = result.get("final_response")
                     if not response_text:
-                        # Extract last AIMessage if final_response not set
                         msgs = result.get("messages", [])
                         response_text = msgs[-1].content if msgs else "I could not generate a response."
 
@@ -104,23 +123,7 @@ def render_chat_interface(
                         st.session_state["chat_history"] = chat_history
                     except Exception:
                         pass
-
-                    # If the assistant generated a new meal plan in chat, offer to update the dashboard
-                    new_plan = extract_meal_plan_json(response_text)
-                    if new_plan and result.get("meal_plan"):
-                        try:
-                            st.session_state["meal_plan"] = result.get("meal_plan")
-                            if result.get("validation_result"):
-                                st.session_state["validation_result"] = result.get("validation_result")
-                            st.toast("🎉 Meal plan updated based on your conversation!")
-                        except Exception:
-                            pass
-
-                except Exception as exc:
-                    err_msg = f"Sorry, I encountered an error communicating with the agent: {str(exc)}"
+                except Exception as e:
+                    err_msg = f"Error during consultation: {e}"
                     st.error(err_msg)
                     chat_history.append({"role": "assistant", "content": err_msg})
-                    try:
-                        st.session_state["chat_history"] = chat_history
-                    except Exception:
-                        pass

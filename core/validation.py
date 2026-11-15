@@ -184,3 +184,133 @@ def run_all_checks(
         )
 
     return issues, deviation_pct
+
+
+# ── 7-Day Weekly Plan Validation ──────────────────────────────────────────────
+
+REQUIRED_DAYS = [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+]
+
+
+def run_weekly_checks(
+    weekly_plan: dict,
+    diet_type: str,
+    allergies: list[str],
+    excluded_foods: list[str],
+    calorie_target: float,
+    food_df: pd.DataFrame,
+) -> tuple[list[str], float, dict[str, float]]:
+    """
+    Validate a complete 7-day Indian meal plan.
+
+    Parameters
+    ----------
+    weekly_plan : dict
+        Dict mapping day names ("monday".."sunday") to day meal dicts
+        {"breakfast": [...], "lunch": [...], "snack": [...], "dinner": [...]}.
+    diet_type : str
+        "veg" or "non-veg".
+    allergies : list[str]
+        User's allergy tags.
+    excluded_foods : list[str]
+        Foods to exclude.
+    calorie_target : float
+        Target calories per day.
+    food_df : pd.DataFrame
+        Food database.
+
+    Returns
+    -------
+    issues : list[str]
+        List of all validation errors.
+    avg_deviation_pct : float
+        Weekly average calorie deviation percentage.
+    daily_calories : dict[str, float]
+        Planned calories per day.
+    """
+    issues: list[str] = []
+    daily_calories: dict[str, float] = {}
+
+    # Check that all 7 days exist
+    normalized_plan: dict[str, dict] = {}
+    for k, v in weekly_plan.items():
+        if isinstance(v, dict):
+            normalized_plan[k.lower().strip()] = v
+
+    for day in REQUIRED_DAYS:
+        if day not in normalized_plan:
+            issues.append(f"7-day meal plan is missing required day: '{day.title()}'.")
+
+    # Name-to-calorie mapping for fast calculation
+    name_to_cal = food_df.set_index("food_name")["calories"].to_dict()
+
+    day_signatures: list[str] = []
+
+    for day in REQUIRED_DAYS:
+        day_meals = normalized_plan.get(day, {})
+        if not day_meals:
+            continue
+
+        # Check required meals in each day
+        for meal in ["breakfast", "lunch", "dinner"]:
+            if not day_meals.get(meal):
+                issues.append(f"{day.title()} is missing required meal: '{meal}'.")
+
+        # Validate items, dietary compliance, allergens, excluded foods for this day
+        day_issues, _ = run_all_checks(
+            plan=day_meals,
+            diet_type=diet_type,
+            allergies=allergies,
+            excluded_foods=excluded_foods,
+            calorie_target=calorie_target,
+            planned_calories=calorie_target,  # check individual calorie deviation below
+            food_df=food_df,
+        )
+        for issue in day_issues:
+            issues.append(f"[{day.title()}] {issue}")
+
+        # Calculate exact day calories
+        day_cal = 0.0
+        day_items_list: list[str] = []
+        for meal_slot in ["breakfast", "lunch", "snack", "dinner"]:
+            for item in day_meals.get(meal_slot, []):
+                fname = item.get("food_name", "")
+                qty = float(item.get("quantity_g", 0.0))
+                day_items_list.append(fname)
+                if fname in name_to_cal and qty > 0:
+                    day_cal += (name_to_cal[fname] * qty) / 100.0
+
+        daily_calories[day.title()] = round(day_cal, 1)
+
+        # Check daily calorie deviation (±15%)
+        dev_pct, within_thresh = check_calorie_deviation(day_cal, calorie_target)
+        if not within_thresh:
+            issues.append(
+                f"[{day.title()}] Calorie deviation of {dev_pct:+.1f}% exceeds ±{int(CALORIE_DEVIATION_THRESHOLD * 100)}% "
+                f"(planned: {day_cal:.0f} kcal, target: {calorie_target:.0f} kcal)."
+            )
+
+        day_signatures.append(",".join(sorted(day_items_list)))
+
+    # Check weekly variety: avoid having 2 days with exactly the same meals
+    if len(day_signatures) >= 7:
+        unique_signatures = set(day_signatures)
+        if len(unique_signatures) < 4:
+            issues.append("Weekly plan lacks sufficient meal variety: multiple days repeat identical foods.")
+
+    # Calculate weekly average calorie deviation
+    if daily_calories:
+        avg_cal = sum(daily_calories.values()) / len(daily_calories)
+        avg_dev_pct, _ = check_calorie_deviation(avg_cal, calorie_target)
+    else:
+        avg_dev_pct = 0.0
+
+    return issues, avg_dev_pct, daily_calories
+

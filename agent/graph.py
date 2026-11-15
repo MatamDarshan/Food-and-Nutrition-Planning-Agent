@@ -34,9 +34,15 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from agent.prompts import REVISION_PROMPT_TEMPLATE, SYSTEM_PROMPT
 from agent.state import AgentState
 from config.settings import settings
-from core.calculations import calculate_nutrition_targets as _calc_targets
+from core.calculations import (
+    calculate_nutrition_targets as _calc_targets,
+    build_day_plan_detail,
+    calculate_weekly_averages,
+    DAYS_OF_WEEK,
+)
+from core.schemas import NutritionTargets, WeeklyPlan, ValidationResult
 from core.user_profile import UserProfile
-from core.validation import run_all_checks
+from core.validation import run_all_checks, run_weekly_checks
 from tools.food_tools import (
     _get_df,
     calculate_meal_nutrition,
@@ -65,30 +71,53 @@ ALL_TOOLS = [
 def extract_meal_plan_json(text: str) -> Optional[dict]:
     """Extract a meal plan dictionary from model output text.
 
-    Looks for JSON fenced in code blocks, or raw JSON object containing
-    the expected meal keys.
+    Supports both:
+    1. 7-day weekly plans: {"monday": {...}, "tuesday": {...}, ...}
+    2. Single-day meal plans: {"breakfast": [...], "lunch": [...], ...}
     """
     if not text:
         return None
 
+    def is_valid_plan_dict(d: dict) -> bool:
+        if not isinstance(d, dict):
+            return False
+        # Check for 7-day plan
+        days_matched = [
+            k for k in d.keys()
+            if str(k).lower().strip() in [
+                "monday", "tuesday", "wednesday", "thursday",
+                "friday", "saturday", "sunday"
+            ]
+        ]
+        if len(days_matched) >= 3:
+            return True
+        # Check for single-day plan
+        meals_matched = [
+            k for k in d.keys()
+            if str(k).lower().strip() in ["breakfast", "lunch", "dinner", "snack"]
+        ]
+        if len(meals_matched) >= 2:
+            return True
+        return False
+
     # 1. Try markdown code blocks: ```json ... ``` or ``` ... ```
-    match = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", text, re.IGNORECASE)
-    if match:
+    matches = re.findall(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", text, re.IGNORECASE)
+    for block in matches:
         try:
-            parsed = json.loads(match.group(1))
-            if any(k in parsed for k in ["breakfast", "lunch", "dinner", "snack"]):
+            parsed = json.loads(block)
+            if is_valid_plan_dict(parsed):
                 return parsed
         except json.JSONDecodeError:
             pass
 
-    # 2. Try outermost curly braces containing meal keys
+    # 2. Try outermost curly braces containing meal/day keys
     first_brace = text.find("{")
     last_brace = text.rfind("}")
     if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
         snippet = text[first_brace : last_brace + 1]
         try:
             parsed = json.loads(snippet)
-            if any(k in parsed for k in ["breakfast", "lunch", "dinner", "snack"]):
+            if is_valid_plan_dict(parsed):
                 return parsed
         except json.JSONDecodeError:
             pass
@@ -169,7 +198,7 @@ def nutrition_calculation_node(state: AgentState) -> dict[str, Any]:
 # ── Demo Mode Fallback Plan Generator ─────────────────────────────────────────
 
 def generate_demo_meal_plan(profile: dict, targets: dict) -> str:
-    """Generate an optimal, fully-compliant Indian meal plan using deterministic rules.
+    """Generate an optimal, fully-compliant 7-day Indian meal plan using deterministic rules.
 
     Used for seamless demo presentation when an external API key is invalid or offline.
     Directly leverages the ICMR-NIN database and enforces dietary and allergen constraints.
@@ -181,7 +210,7 @@ def generate_demo_meal_plan(profile: dict, targets: dict) -> str:
     cal_target = targets.get("calorie_target", 2000.0)
 
     # Filter helper
-    def get_slot_candidates(meal_slot: str) -> list[dict]:
+    def get_slot_candidates(meal_slot: str) -> list[str]:
         mask = (
             (df["diet_type"] == "veg" if diet_type == "veg" else pd.Series([True] * len(df)))
             & df["meal_type"].str.contains(meal_slot, regex=False, na=False)
@@ -190,63 +219,154 @@ def generate_demo_meal_plan(profile: dict, targets: dict) -> str:
         for allergen in allergies:
             mask = mask & ~df["allergens"].str.contains(allergen, case=False, regex=False, na=False)
         matched = df[mask]
-        return matched.to_dict(orient="records") if not matched.empty else []
+        return matched["food_name"].tolist() if not matched.empty else []
 
     b_cands = get_slot_candidates("breakfast")
     l_cands = get_slot_candidates("lunch")
     s_cands = get_slot_candidates("snack")
     d_cands = get_slot_candidates("dinner")
 
-    # Pick representative foods
-    def pick_items(cands: list[dict], default_names: list[str], fallback_cat: str) -> list[str]:
-        names_in_cands = {c["food_name"] for c in cands}
-        chosen = [n for n in default_names if n in names_in_cands]
-        if not chosen and cands:
-            chosen = [cands[0]["food_name"]]
-        return chosen
+    def pick_first_available(cands: list[str], preferred: list[str]) -> str:
+        for p in preferred:
+            if p in cands:
+                return p
+        return cands[0] if cands else "Basmati Rice"
 
-    # Default balanced Indian staples
-    b_chosen = pick_items(b_cands, ["Idli", "Sambar", "Besan Chilla", "Poha", "Egg Bhurji"], "Grain")[:2]
-    l_chosen = pick_items(l_cands, ["Basmati Rice", "Dal Tadka", "Palak Paneer", "Chicken Curry", "Raita"], "Legume")[:3]
-    s_chosen = pick_items(s_cands, ["Sprouts Salad", "Apple", "Banana", "Dhokla", "Papaya"], "Fruit")[:1]
-    d_chosen = pick_items(d_cands, ["Whole Wheat Roti", "Chana Masala", "Dal Makhani", "Baingan Bharta"], "Grain")[:2]
+    # 7 balanced day templates with authentic Indian staples
+    day_templates = [
+        # Monday
+        {
+            "breakfast": [("Idli", ["Idli", "Besan Chilla", "Poha"]), ("Sambar", ["Sambar", "Coconut Chutney", "Plain Curd"])],
+            "lunch": [("Basmati Rice", ["Basmati Rice", "Brown Rice"]), ("Dal Tadka", ["Dal Tadka", "Moong Dal Soup"]), ("Raita", ["Raita", "Plain Curd", "Sprouts Salad"])],
+            "snack": [("Apple", ["Apple", "Banana", "Papaya", "Guava"])],
+            "dinner": [
+                ("Whole Wheat Roti", ["Whole Wheat Roti", "Basmati Rice"]),
+                ("Chicken Curry" if diet_type == "non-veg" else "Palak Paneer",
+                 ["Chicken Curry", "Palak Paneer", "Chana Masala", "Dal Tadka"] if diet_type == "non-veg" else ["Palak Paneer", "Chana Masala", "Dal Tadka"])
+            ],
+        },
+        # Tuesday
+        {
+            "breakfast": [("Poha", ["Poha", "Upma", "Besan Chilla"]), ("Plain Curd", ["Plain Curd", "Buttermilk / Chaas", "Sprouts Salad"])],
+            "lunch": [("Whole Wheat Roti", ["Whole Wheat Roti", "Brown Rice"]), ("Rajma", ["Rajma", "Chana Masala", "Dal Tadka"]), ("Buttermilk / Chaas", ["Buttermilk / Chaas", "Plain Curd", "Sprouts Salad"])],
+            "snack": [("Sprouts Salad", ["Sprouts Salad", "Dhokla", "Apple"])],
+            "dinner": [("Basmati Rice", ["Basmati Rice", "Whole Wheat Roti"]), ("Chana Masala", ["Chana Masala", "Rajma", "Dal Tadka"])],
+        },
+        # Wednesday
+        {
+            "breakfast": [("Besan Chilla", ["Besan Chilla", "Idli", "Dosa"]), ("Coconut Chutney", ["Coconut Chutney", "Sambar", "Plain Curd"])],
+            "lunch": [("Vegetable Khichdi", ["Vegetable Khichdi", "Basmati Rice", "Vegetable Pulao"]), ("Plain Curd", ["Plain Curd", "Raita", "Sprouts Salad"])],
+            "snack": [("Banana", ["Banana", "Papaya", "Apple", "Guava"])],
+            "dinner": [
+                ("Whole Wheat Roti", ["Whole Wheat Roti", "Basmati Rice"]),
+                ("Egg Curry" if diet_type == "non-veg" else "Dal Makhani",
+                 ["Egg Curry", "Dal Makhani", "Chana Masala", "Dal Tadka"] if diet_type == "non-veg" else ["Dal Makhani", "Chana Masala", "Dal Tadka"])
+            ],
+        },
+        # Thursday
+        {
+            "breakfast": [("Upma", ["Upma", "Poha", "Idli"]), ("Sambar", ["Sambar", "Plain Curd", "Coconut Chutney"])],
+            "lunch": [("Brown Rice", ["Brown Rice", "Basmati Rice"]), ("Dal Tadka", ["Dal Tadka", "Rajma", "Moong Dal Soup"]), ("Aloo Gobi", ["Aloo Gobi", "Baingan Bharta", "Sprouts Salad"])],
+            "snack": [("Guava", ["Guava", "Papaya", "Apple", "Banana"])],
+            "dinner": [("Whole Wheat Roti", ["Whole Wheat Roti", "Basmati Rice"]), ("Baingan Bharta", ["Baingan Bharta", "Palak Paneer", "Dal Tadka"]), ("Moong Dal Soup", ["Moong Dal Soup", "Sambar"])],
+        },
+        # Friday
+        {
+            "breakfast": [("Dosa", ["Dosa", "Idli", "Besan Chilla"]), ("Sambar", ["Sambar", "Coconut Chutney", "Plain Curd"])],
+            "lunch": [
+                ("Basmati Rice", ["Basmati Rice", "Brown Rice"]),
+                ("Fish Curry" if diet_type == "non-veg" else "Palak Paneer",
+                 ["Fish Curry", "Palak Paneer", "Rajma", "Dal Tadka"] if diet_type == "non-veg" else ["Palak Paneer", "Rajma", "Dal Tadka"]),
+                ("Raita", ["Raita", "Plain Curd", "Sprouts Salad"])
+            ],
+            "snack": [("Dhokla", ["Dhokla", "Sprouts Salad", "Apple", "Banana"])],
+            "dinner": [("Whole Wheat Roti", ["Whole Wheat Roti", "Basmati Rice"]), ("Chana Masala", ["Chana Masala", "Dal Tadka", "Rajma"])],
+        },
+        # Saturday
+        {
+            "breakfast": [
+                ("Egg Bhurji" if diet_type == "non-veg" else "Aloo Paratha",
+                 ["Egg Bhurji", "Aloo Paratha", "Besan Chilla", "Poha"] if diet_type == "non-veg" else ["Aloo Paratha", "Besan Chilla", "Poha"]),
+                ("Wheat Bread Toast" if diet_type == "non-veg" else "Plain Curd",
+                 ["Wheat Bread Toast", "Plain Curd", "Raita"] if diet_type == "non-veg" else ["Plain Curd", "Raita"])
+            ],
+            "lunch": [("Vegetable Pulao", ["Vegetable Pulao", "Basmati Rice", "Vegetable Khichdi"]), ("Kadhi Pakora", ["Kadhi Pakora", "Dal Tadka", "Rajma", "Plain Curd"])],
+            "snack": [("Papaya", ["Papaya", "Guava", "Apple", "Banana"])],
+            "dinner": [("Whole Wheat Roti", ["Whole Wheat Roti", "Basmati Rice"]), ("Rajma", ["Rajma", "Chana Masala", "Dal Tadka"])],
+        },
+        # Sunday
+        {
+            "breakfast": [
+                ("Egg Omelette" if diet_type == "non-veg" else "Medu Vada",
+                 ["Egg Omelette", "Medu Vada", "Idli", "Besan Chilla"] if diet_type == "non-veg" else ["Medu Vada", "Idli", "Besan Chilla"]),
+                ("Wheat Bread Toast" if diet_type == "non-veg" else "Sambar",
+                 ["Wheat Bread Toast", "Sambar", "Coconut Chutney"] if diet_type == "non-veg" else ["Sambar", "Coconut Chutney"])
+            ],
+            "lunch": [
+                ("Basmati Rice", ["Basmati Rice", "Vegetable Pulao"]),
+                ("Dal Tadka", ["Dal Tadka", "Moong Dal Soup"]),
+                ("Chicken Biryani" if diet_type == "non-veg" else "Paneer Butter Masala",
+                 ["Chicken Biryani", "Paneer Butter Masala", "Palak Paneer", "Chicken Curry"] if diet_type == "non-veg" else ["Paneer Butter Masala", "Palak Paneer", "Rajma"])
+            ],
+            "snack": [("Sprouts Salad", ["Sprouts Salad", "Dhokla", "Apple", "Papaya"])],
+            "dinner": [
+                ("Whole Wheat Roti", ["Whole Wheat Roti", "Basmati Rice"]),
+                ("Tandoori Chicken" if diet_type == "non-veg" else "Palak Paneer",
+                 ["Tandoori Chicken", "Palak Paneer", "Chana Masala", "Dal Tadka"] if diet_type == "non-veg" else ["Palak Paneer", "Chana Masala", "Dal Tadka"])
+            ],
+        },
+    ]
 
-    # Baseline portion sizes (grams)
-    base_plan = {
-        "breakfast": [{"food_name": name, "quantity_g": 120.0} for name in b_chosen],
-        "lunch": [{"food_name": name, "quantity_g": 150.0} for name in l_chosen],
-        "snack": [{"food_name": name, "quantity_g": 100.0} for name in s_chosen],
-        "dinner": [{"food_name": name, "quantity_g": 120.0} for name in d_chosen],
-    }
-
-    # Calculate baseline calories
+    day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
     name_map = df.set_index("food_name")["calories"].to_dict()
-    raw_cal = 0.0
-    for meal_items in base_plan.values():
-        for it in meal_items:
-            raw_cal += (name_map.get(it["food_name"], 100.0) * it["quantity_g"]) / 100.0
 
-    # Scale portions to match calorie target within +/- 2%
-    scale = cal_target / max(raw_cal, 500.0)
-    scaled_plan: dict[str, list[dict]] = {}
-    for slot, items in base_plan.items():
-        scaled_plan[slot] = []
-        for it in items:
-            adjusted_qty = round(it["quantity_g"] * scale / 5.0) * 5.0  # round to nearest 5g
-            scaled_plan[slot].append({
-                "food_name": it["food_name"],
-                "quantity_g": max(adjusted_qty, 30.0),
-            })
+    scaled_7day_plan: dict[str, dict[str, list[dict]]] = {}
+    cands_map = {"breakfast": b_cands, "lunch": l_cands, "snack": s_cands, "dinner": d_cands}
 
-    plan_json = json.dumps(scaled_plan, indent=2)
+    for idx, d_name in enumerate(day_names):
+        tmpl = day_templates[idx]
+        day_raw_plan: dict[str, list[dict]] = {}
+        base_cal = 0.0
+
+        for slot in ["breakfast", "lunch", "snack", "dinner"]:
+            day_raw_plan[slot] = []
+            slot_cands = cands_map[slot]
+            items_spec = tmpl[slot]
+            for primary, pref_list in items_spec:
+                chosen = pick_first_available(slot_cands, pref_list)
+                default_qty = 100.0 if slot == "snack" else (140.0 if slot == "lunch" else 110.0)
+                day_raw_plan[slot].append({"food_name": chosen, "quantity_g": default_qty})
+                base_cal += (name_map.get(chosen, 100.0) * default_qty) / 100.0
+
+        # Scale day portions to match cal_target within +/- 1%
+        scale = cal_target / max(base_cal, 400.0)
+        day_scaled: dict[str, list[dict]] = {}
+        for slot, items in day_raw_plan.items():
+            day_scaled[slot] = []
+            for it in items:
+                adj = round((it["quantity_g"] * scale) / 5.0) * 5.0
+                day_scaled[slot].append({
+                    "food_name": it["food_name"],
+                    "quantity_g": max(adj, 30.0),
+                })
+        scaled_7day_plan[d_name] = day_scaled
+
+    # Top-level meal slots for legacy 1-day callers
+    mon_plan = scaled_7day_plan["monday"]
+    scaled_7day_plan["breakfast"] = mon_plan["breakfast"]
+    scaled_7day_plan["lunch"] = mon_plan["lunch"]
+    scaled_7day_plan["snack"] = mon_plan["snack"]
+    scaled_7day_plan["dinner"] = mon_plan["dinner"]
+
+    plan_json = json.dumps(scaled_7day_plan, indent=2)
     demo_explanation = (
-        f"### 🥗 Personalized Meal Plan (Target: {cal_target:.0f} kcal)\n\n"
+        f"### 🥗 7-Day Personalized Indian Nutrition Plan (Target: {cal_target:.0f} kcal/day)\n\n"
         f"```json\n{plan_json}\n```\n\n"
         f"**Nutritionist Rationale:**\n"
-        f"- **Breakfast:** Light, easily digestible energy source paired with protein.\n"
-        f"- **Lunch:** Wholesome Indian staple combining complex carbohydrates and protein.\n"
-        f"- **Evening Snack:** High-fiber, nutrient-dense snack to prevent late-day energy dips.\n"
-        f"- **Dinner:** Balanced low-glycemic combination for sustained satiety and overnight muscle recovery.\n\n"
+        f"- **Weekly Variety & Nutrient Density:** Features a rich variety of Indian whole grains (Roti, Basmati Rice, Brown Rice, Poha, Khichdi, Idli), protein-rich dals and legumes (Dal Tadka, Rajma, Chana Masala, Moong Dal), and fresh vegetables.\n"
+        f"- **Macronutrient Balance:** Balanced distribution across the day (~25% Breakfast, 35% Lunch, 10% Evening Snack, 30% Dinner).\n"
+        f"- **Strict Allergen & Preference Protection:** 100% compliant with your dietary preference ({diet_type.title()}) and specified allergen restrictions.\n"
+        f"- **Hydration & Satiety:** High-fiber whole foods and probiotic curd/raita provide sustained energy and optimal gut health.\n\n"
         f"*(Generated via Agentic Planning Engine & ICMR-NIN Indian Food Composition Database)*"
     )
     return demo_explanation
@@ -302,18 +422,48 @@ def agent_node(state: AgentState) -> dict[str, Any]:
                     "- **Palak Paneer** — combines paneer with antioxidant-rich spinach.\n"
                     "- **Plain Curd / Greek Yogurt** — rich in dairy calcium and probiotics with lower fat."
                 )
+            elif "rice" in last_q and any(w in last_q for w in ["alternative", "substitute", "replace"]):
+                reply = (
+                    "**AI Nutritionist:** Excellent Indian whole-grain alternatives to white basmati rice:\n"
+                    "- **Whole Wheat Roti** (233 kcal, 7.8g protein, 5g fiber) — rich in complex carbohydrates and B-vitamins.\n"
+                    "- **Brown Rice** (111 kcal, 2.6g protein, 1.8g fiber) — unpolished whole grain with lower glycemic response.\n"
+                    "- **Vegetable Khichdi** (120 kcal, 3.5g protein) — soothing prebiotic combination of rice, lentils, and vegetables.\n"
+                    "- **Ragi Mudde** (110 kcal, 2.3g protein, 344mg Calcium) — calcium-dense millet staple."
+                )
+            elif "lunch" in last_q and any(w in last_q for w in ["alternative", "substitute", "replace", "suggest"]):
+                reply = (
+                    "**AI Nutritionist:** Balanced Indian lunch alternatives:\n"
+                    "- **Whole Wheat Roti (90g) + Rajma (180g) + Buttermilk (150ml)** — protein-dense and fiber-rich.\n"
+                    "- **Vegetable Khichdi (200g) + Plain Curd (120g)** — easily digestible complete amino acid profile.\n"
+                    "- **Brown Rice (150g) + Chana Masala (180g) + Fresh Cucumber Raita (100g)** — sustained energy release."
+                )
             elif "breakfast" in last_q:
                 reply = (
                     "**AI Nutritionist:** Wholesome Indian breakfast options from our database:\n"
                     "- **Besan Chilla** (180 kcal, 9.5g protein) — high protein, low glycemic index.\n"
-                    "- **Poha with vegetables** (120 kcal) — light and easily digestible.\n"
-                    "- **Idli + Sambar** (128 kcal) — traditional fermented South Indian staple.\n"
-                    "- **Sprouts Salad** (85 kcal, 7.5g protein) — fresh and fiber-rich."
+                    "- **Poha with vegetables & peanuts** (120 kcal) — light and easily digestible.\n"
+                    "- **Idli + Sambar** (128 kcal) — traditional fermented South Indian staple with complete protein.\n"
+                    "- **Sprouts Salad** (85 kcal, 7.5g protein) — fresh, enzymatic, and fiber-rich."
+                )
+            elif "breakdown" in last_q or "explain" in last_q and "nutrition" in last_q:
+                cal_val = targets.get("calorie_target", 2000.0)
+                prot_val = targets.get("protein_g", 100.0)
+                carb_val = targets.get("carbs_g", 250.0)
+                fat_val = targets.get("fats_g", 60.0)
+                fib_val = targets.get("fiber_g", 28.0)
+                reply = (
+                    f"**AI Nutritionist:** Here is your daily nutritional breakdown:\n"
+                    f"- **Daily Energy Target:** {cal_val:.0f} kcal (aligned with your fitness goal)\n"
+                    f"- **Protein Goal:** {prot_val:.1f}g (~{(prot_val*4/cal_val)*100:.0f}% of calories) — promotes lean tissue maintenance and satiety\n"
+                    f"- **Carbohydrate Goal:** {carb_val:.1f}g (~{(carb_val*4/cal_val)*100:.0f}% of calories) — sustains mental and muscular endurance\n"
+                    f"- **Healthy Fat Goal:** {fat_val:.1f}g (~{(fat_val*9/cal_val)*100:.0f}% of calories) — supports endocrine function and vitamin absorption\n"
+                    f"- **Dietary Fiber:** {fib_val:.1f}g — supports glycemic control and healthy digestion.\n\n"
+                    f"Meals are structured into ~25% Breakfast, 35% Lunch, 10% Snack, and 30% Dinner."
                 )
             elif "why" in last_q or "recommend" in last_q:
                 reply = (
                     "**AI Nutritionist:** The foods were recommended based on:\n"
-                    "1. **Macronutrient Balance:** Pairing Indian staples (grains + dals) to achieve a complete amino acid profile.\n"
+                    "1. **Cereal-Pulse Complementarity:** Pairing grains (roti/rice) with legumes (dals/beans) to achieve a complete amino acid profile.\n"
                     "2. **Caloric Distribution:** Proportioning meals across the day (approx 25% Breakfast, 35% Lunch, 10% Snack, 30% Dinner).\n"
                     "3. **Strict Compliance:** Zero non-vegetarian foods in vegetarian plans and 100% exclusion of your specified allergens."
                 )
@@ -413,58 +563,113 @@ def meal_validation_node(state: AgentState) -> dict[str, Any]:
     diet_type = profile.get("diet_type", "veg")
     allergies = profile.get("allergies", [])
     excluded_foods = profile.get("excluded_foods", [])
-
-    # Calculate actual nutrition using database
     df = _get_df()
-    name_index = df.set_index("food_name")[
-        ["calories", "protein", "carbohydrates", "fats", "fiber"]
-    ].to_dict(orient="index")
 
-    planned_cal = 0.0
-    planned_prot = 0.0
-    planned_carb = 0.0
-    planned_fat = 0.0
-
-    for meal_key in ["breakfast", "lunch", "snack", "dinner"]:
-        for item in meal_plan_dict.get(meal_key, []):
-            fname = item.get("food_name", "")
-            qty = float(item.get("quantity_g", 0))
-            if fname in name_index and qty > 0:
-                scale = qty / 100.0
-                row = name_index[fname]
-                planned_cal += row["calories"] * scale
-                planned_prot += row["protein"] * scale
-                planned_carb += row["carbohydrates"] * scale
-                planned_fat += row["fats"] * scale
-
-    planned_cal = round(planned_cal, 1)
-    planned_prot = round(planned_prot, 1)
-    planned_carb = round(planned_carb, 1)
-    planned_fat = round(planned_fat, 1)
-
-    issues, dev_pct = run_all_checks(
-        plan=meal_plan_dict,
-        diet_type=diet_type,
-        allergies=allergies,
-        excluded_foods=excluded_foods,
-        calorie_target=calorie_target,
-        planned_calories=planned_cal,
-        food_df=df,
+    # Check if 7-day weekly plan or 1-day plan
+    has_days = any(
+        k in meal_plan_dict
+        for k in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
     )
 
-    validation_result = {
-        "is_valid": len(issues) == 0,
-        "issues": issues,
-        "calorie_deviation_pct": dev_pct,
-        "planned_calories": planned_cal,
-        "planned_protein": planned_prot,
-        "planned_carbs": planned_carb,
-        "planned_fats": planned_fat,
-        "target_calories": calorie_target,
-        "target_protein": targets.get("protein_g", 0.0),
-        "target_carbs": targets.get("carbs_g", 0.0),
-        "target_fats": targets.get("fats_g", 0.0),
-    }
+    if has_days:
+        issues, avg_dev_pct, daily_cals = run_weekly_checks(
+            weekly_plan=meal_plan_dict,
+            diet_type=diet_type,
+            allergies=allergies,
+            excluded_foods=excluded_foods,
+            calorie_target=calorie_target,
+            food_df=df,
+        )
+        avg_cal = round(sum(daily_cals.values()) / max(len(daily_cals), 1), 1)
+
+        # Estimate average macros across all 7 days
+        name_index = df.set_index("food_name")[["protein", "carbohydrates", "fats"]].to_dict(orient="index")
+        tot_p, tot_c, tot_f = 0.0, 0.0, 0.0
+        day_count = 0
+        for d in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]:
+            if d in meal_plan_dict and isinstance(meal_plan_dict[d], dict):
+                day_count += 1
+                for s in ["breakfast", "lunch", "snack", "dinner"]:
+                    for it in meal_plan_dict[d].get(s, []):
+                        fn = it.get("food_name", "")
+                        q = float(it.get("quantity_g", 0.0))
+                        if fn in name_index and q > 0:
+                            sc = q / 100.0
+                            tot_p += name_index[fn]["protein"] * sc
+                            tot_c += name_index[fn]["carbohydrates"] * sc
+                            tot_f += name_index[fn]["fats"] * sc
+
+        avg_prot = round(tot_p / max(day_count, 1), 1)
+        avg_carb = round(tot_c / max(day_count, 1), 1)
+        avg_fat = round(tot_f / max(day_count, 1), 1)
+
+        validation_result = {
+            "is_valid": len(issues) == 0,
+            "issues": issues,
+            "calorie_deviation_pct": avg_dev_pct,
+            "planned_calories": avg_cal,
+            "planned_protein": avg_prot,
+            "planned_carbs": avg_carb,
+            "planned_fats": avg_fat,
+            "target_calories": calorie_target,
+            "target_protein": targets.get("protein_g", 0.0),
+            "target_carbs": targets.get("carbs_g", 0.0),
+            "target_fats": targets.get("fats_g", 0.0),
+            "daily_calories": daily_cals,
+            "is_weekly": True,
+        }
+    else:
+        # Single day plan validation
+        name_index = df.set_index("food_name")[
+            ["calories", "protein", "carbohydrates", "fats", "fiber"]
+        ].to_dict(orient="index")
+
+        planned_cal = 0.0
+        planned_prot = 0.0
+        planned_carb = 0.0
+        planned_fat = 0.0
+
+        for meal_key in ["breakfast", "lunch", "snack", "dinner"]:
+            for item in meal_plan_dict.get(meal_key, []):
+                fname = item.get("food_name", "")
+                qty = float(item.get("quantity_g", 0))
+                if fname in name_index and qty > 0:
+                    scale = qty / 100.0
+                    row = name_index[fname]
+                    planned_cal += row["calories"] * scale
+                    planned_prot += row["protein"] * scale
+                    planned_carb += row["carbohydrates"] * scale
+                    planned_fat += row["fats"] * scale
+
+        planned_cal = round(planned_cal, 1)
+        planned_prot = round(planned_prot, 1)
+        planned_carb = round(planned_carb, 1)
+        planned_fat = round(planned_fat, 1)
+
+        issues, dev_pct = run_all_checks(
+            plan=meal_plan_dict,
+            diet_type=diet_type,
+            allergies=allergies,
+            excluded_foods=excluded_foods,
+            calorie_target=calorie_target,
+            planned_calories=planned_cal,
+            food_df=df,
+        )
+
+        validation_result = {
+            "is_valid": len(issues) == 0,
+            "issues": issues,
+            "calorie_deviation_pct": dev_pct,
+            "planned_calories": planned_cal,
+            "planned_protein": planned_prot,
+            "planned_carbs": planned_carb,
+            "planned_fats": planned_fat,
+            "target_calories": calorie_target,
+            "target_protein": targets.get("protein_g", 0.0),
+            "target_carbs": targets.get("carbs_g", 0.0),
+            "target_fats": targets.get("fats_g", 0.0),
+            "is_weekly": False,
+        }
 
     return {
         "meal_plan": meal_plan_dict,
@@ -504,7 +709,7 @@ def plan_revision_node(state: AgentState) -> dict[str, Any]:
 # ── Node 7: Final Response ────────────────────────────────────────────────────
 
 def final_response_node(state: AgentState) -> dict[str, Any]:
-    """Assemble final validated plan and conversational response."""
+    """Assemble final validated plan, structured WeeklyPlan object, and conversational response."""
     error = state.get("error")
     if error:
         return {"final_response": f"Error: {error}"}
@@ -523,7 +728,83 @@ def final_response_node(state: AgentState) -> dict[str, Any]:
         )
         last_text = f"{last_text}\n{fallback_notice}"
 
-    return {"final_response": str(last_text)}
+    # Build the full structured WeeklyPlan Pydantic model
+    targets_dict = state.get("nutrition_targets") or {}
+    meal_plan_dict = state.get("meal_plan")
+    weekly_plan_dict = None
+
+    if targets_dict and meal_plan_dict:
+        try:
+            targets_obj = NutritionTargets(**targets_dict)
+            df = _get_df()
+            day_keys = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+            has_days = any(k in meal_plan_dict for k in day_keys)
+
+            days_list = []
+            for dk in day_keys:
+                day_meals = meal_plan_dict.get(dk) if has_days else meal_plan_dict
+                if not day_meals or not isinstance(day_meals, dict):
+                    day_meals = {
+                        "breakfast": meal_plan_dict.get("breakfast", []),
+                        "lunch": meal_plan_dict.get("lunch", []),
+                        "snack": meal_plan_dict.get("snack", []),
+                        "dinner": meal_plan_dict.get("dinner", []),
+                    }
+                dp = build_day_plan_detail(
+                    day_name=dk.title(),
+                    meals_dict=day_meals,
+                    food_df=df,
+                    target_calories=targets_obj.calorie_target,
+                )
+                days_list.append(dp)
+
+            averages = calculate_weekly_averages(days_list, targets_obj)
+
+            v_res_obj = None
+            if val_res:
+                v_res_obj = ValidationResult(
+                    is_valid=val_res.get("is_valid", True),
+                    issues=val_res.get("issues", []),
+                    calorie_deviation_pct=val_res.get("calorie_deviation_pct", 0.0),
+                    planned_calories=val_res.get("planned_calories", 0.0),
+                    planned_protein=val_res.get("planned_protein", 0.0),
+                    planned_carbs=val_res.get("planned_carbs", 0.0),
+                    planned_fats=val_res.get("planned_fats", 0.0),
+                )
+
+            wp = WeeklyPlan(
+                user_targets=targets_obj,
+                days=days_list,
+                weekly_averages=averages,
+                rationale=str(last_text),
+                validation_result=v_res_obj,
+                source_references=[
+                    "ICMR-NIN Indian Food Composition Tables (IFCT 2017)",
+                    "ICMR-NIN Dietary Guidelines for Indians & RDA 2020",
+                ],
+            )
+            weekly_plan_dict = wp.model_dump()
+        except Exception:
+            pass
+
+    flat_meal_plan = meal_plan_dict
+    if meal_plan_dict and any(
+        k in meal_plan_dict
+        for k in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    ):
+        mon = meal_plan_dict.get("monday") or {}
+        flat_meal_plan = {
+            "breakfast": mon.get("breakfast", meal_plan_dict.get("breakfast", [])),
+            "lunch": mon.get("lunch", meal_plan_dict.get("lunch", [])),
+            "snack": mon.get("snack", meal_plan_dict.get("snack", [])),
+            "dinner": mon.get("dinner", meal_plan_dict.get("dinner", [])),
+        }
+
+    return {
+        "final_response": str(last_text),
+        "weekly_plan": weekly_plan_dict,
+        "meal_plan": flat_meal_plan,
+    }
 
 
 # ── Conditional Routing Functions ─────────────────────────────────────────────

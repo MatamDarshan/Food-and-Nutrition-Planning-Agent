@@ -1,12 +1,12 @@
-# 🥗 AI-Based Food and Nutrition Planning Agent
+# 🌿 AI-Based Food and Nutrition Planning Agent
 
-An autonomous Agentic AI system that computes personalized biometric energy requirements, searches curated Indian foods (ICMR-NIN), generates balanced 4-meal daily plans, and self-validates dietary compliance using Google Gemini 2.0 Flash and LangGraph.
+An autonomous Agentic AI system that computes personalized biometric energy requirements, searches curated Indian foods (ICMR-NIN), generates balanced 7-day meal plans (Monday to Sunday), calculates detailed macronutrients and micronutrients (Vitamins & Minerals), and self-validates dietary compliance using Google Gemini 2.0 Flash, LangGraph, and RAG.
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Gemini](https://img.shields.io/badge/Google_Gemini-2.0_Flash-orange.svg)](https://deepmind.google/technologies/gemini/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2%2B-green.svg)](https://langchain-ai.github.io/langgraph/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.32%2B-red.svg)](https://streamlit.io/)
-[![Tests](https://img.shields.io/badge/Tests-71%20passed%20(100%25)-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-86%20passed%20(100%25)-brightgreen.svg)](tests/)
 [![RAG](https://img.shields.io/badge/RAG-FAISS%20%2B%20HuggingFace-blueviolet.svg)](rag/)
 
 ---
@@ -124,12 +124,16 @@ AI-Food-Nutrition-Agent/
 │
 ├── ui/
 │   ├── __init__.py
-│   ├── profile_form.py                # Biometric & dietary restriction form
-│   ├── dashboard.py                   # KPI metrics, macro deltas, meal tables & charts
-│   └── chat_interface.py             # Multi-turn chat with session memory
+│   ├── profile_form.py                # Page 1: 4-section biometric & goal profile form
+│   ├── dashboard.py                   # Page 2: KPI metrics, macro distributions, charts
+│   ├── meal_planner.py                # Page 3: 7-day meal cards, micronutrients, weekly analytics
+│   ├── food_database.py               # Page 4: 57-item food composition & micronutrient inspector
+│   ├── chat_interface.py             # Page 5: Multi-turn AI Nutritionist chat with RAG
+│   └── styles.py                      # Modern theme CSS, dark green/mint palette & cards
 │
 ├── data/
 │   ├── food_data.csv                  # 57 Indian food items (ICMR-NIN curated)
+│   ├── micronutrient_data.py          # IFCT 2017 vitamins & minerals + RDA 2020 targets
 │   └── validate_data.py               # Standalone dataset integrity validator
 │
 ├── rag/
@@ -148,12 +152,13 @@ AI-Food-Nutrition-Agent/
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py                    # Pytest shared fixtures
-│   ├── test_calculations.py           # Unit tests for math formulas & profile checks
-│   ├── test_tools.py                  # Unit tests for all 5 Python tools
-│   ├── test_agent.py                  # Integration tests for LangGraph nodes & routing
-│   ├── test_functional_evaluation.py  # 7-scenario functional verification matrix
-│   ├── test_offline_and_live.py       # Offline fallback & live API routing tests
-│   └── test_rag.py                    # 18 unit & integration tests for RAG pipeline
+│   ├── test_calculations.py           # Unit tests for math formulas & profile checks (20 tests)
+│   ├── test_tools.py                  # Unit tests for all 5 Python tools (10 tests)
+│   ├── test_agent.py                  # Integration tests for LangGraph nodes & routing (9 tests)
+│   ├── test_functional_evaluation.py  # 7-scenario functional verification matrix (10 tests)
+│   ├── test_offline_and_live.py       # Offline fallback & live API routing tests (4 tests)
+│   ├── test_rag.py                    # Unit & integration tests for RAG pipeline (18 tests)
+│   └── test_7day_upgrade.py           # 15-scenario verification for 7-day meal planning & UI (15 tests)
 │
 └── evidence/
     ├── evaluation_report.md           # Formal testing & evaluation benchmark report
@@ -217,9 +222,9 @@ pytest tests/ -v
 ```
 
 ### Summary of Results
-- **Collected:** 71 test cases across 6 test modules
-- **Passed:** 71 (100% Pass Rate)
-- **Execution Time:** ~98 seconds (including local HuggingFace embedding initialization)
+- **Collected:** 86 test cases across 7 test modules
+- **Passed:** 86 (100% Pass Rate)
+- **Execution Time:** ~65 seconds
 
 ### Module Breakdown
 | Test Module | Coverage Area | Status |
@@ -230,6 +235,7 @@ pytest tests/ -v
 | `test_functional_evaluation.py` | End-to-end user journeys: Veg, Non-Veg, Allergies, Substitutions (10 tests) | ✅ 10 PASS |
 | `test_offline_and_live.py` | Graceful offline demo planner & chat fallback (4 tests) | ✅ 4 PASS |
 | `test_rag.py` | PDF loading, chunking, embeddings, FAISS search, distance rejection (18 tests) | ✅ 18 PASS |
+| `test_7day_upgrade.py` | 15-scenario verification: 7-day plans, allergens, micronutrients, calculations (15 tests) | ✅ 15 PASS |
 
 Run the dedicated 16-query RAG factual accuracy and rejection benchmark:
 ```bash
