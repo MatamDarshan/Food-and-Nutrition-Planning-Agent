@@ -1,173 +1,164 @@
 """
 ui/dashboard.py
 ---------------
-Page 2: Modern Nutrition Dashboard with:
-- Individual metric cards for:
-  * BMI & BMI category
-  * BMR (Mifflin-St Jeor)
-  * TDEE (Maintenance)
-  * Daily calorie target
-  * Daily protein target
-  * Daily carbohydrate target
-  * Daily fat target
-  * Dietary fibre target
-- Visual charts:
-  * Macronutrient distribution (calories & %)
-  * Calorie target comparison (BMR vs TDEE vs Daily Target)
-  * Protein, carbohydrate, fat, and fiber target breakdown (grams)
+The "your numbers" dashboard shown under the profile form.
+
+All values are supplied by the existing ``calculate_nutrition_targets`` backend.
+This module only presents BMI, BMR/RMR, TDEE, calorie and macro targets with
+colour-coded cards, a distribution chart and a short methodology explainer.
 """
 
+from __future__ import annotations
+
 from typing import Any, Optional
+
 import pandas as pd
 import streamlit as st
+
+from ui.components import (
+    callout,
+    metric_card,
+    progress_bar,
+    render_badges,
+    section_header,
+    stat_tile,
+)
+from ui.layout import render_page_header
+
+
+def _num(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _bmi_tone(category: str) -> str:
+    text = str(category).lower()
+    if "normal" in text or "healthy" in text:
+        return "green"
+    if "under" in text:
+        return "amber"
+    if "over" in text:
+        return "orange"
+    if "obes" in text:
+        return "red"
+    return "blue"
+
+
+def render_targets_panel(
+    targets: Optional[dict[str, Any]],
+    user_profile: Optional[dict[str, Any]] = None,
+) -> None:
+    """Show BMI, BMR, TDEE and daily targets as a polished dashboard."""
+    if not targets:
+        callout("Fill in the profile above to calculate your calorie and macro targets.", tone="blue")
+        return
+
+    bmi = _num(targets.get("bmi"))
+    bmi_category = str(targets.get("bmi_category", "Unknown"))
+    bmr = _num(targets.get("bmr"))
+    tdee = _num(targets.get("tdee"))
+    calorie = _num(targets.get("calorie_target"), 2000.0)
+    protein = _num(targets.get("protein_g"))
+    carbs = _num(targets.get("carbs_g"))
+    fats = _num(targets.get("fats_g"))
+    fibre = _num(targets.get("fiber_g"))
+
+    render_page_header(
+        "Your calculated numbers",
+        subtitle="These targets come from your age, body measurements, activity level and goal.",
+        icon="📊",
+        level=3,
+        badges=[
+            {"label": f"BMI category: {bmi_category}", "tone": _bmi_tone(bmi_category), "icon": "📏"},
+            {"label": f"{calorie:,.0f} kcal/day", "tone": "orange", "icon": "🔥"},
+        ],
+    )
+
+    section_header("Energy baseline", icon="⚡", level=5)
+    columns = st.columns(4)
+    with columns[0]:
+        metric_card("BMI", f"{bmi:.1f}", tone=_bmi_tone(bmi_category))
+        st.caption(bmi_category)
+    with columns[1]:
+        metric_card("BMR / RMR (kcal)", f"{bmr:,.0f}", tone="teal")
+        st.caption("Energy at rest")
+    with columns[2]:
+        metric_card("TDEE (kcal)", f"{tdee:,.0f}", tone="blue")
+        st.caption("Maintenance needs")
+    with columns[3]:
+        metric_card("Daily target (kcal)", f"{calorie:,.0f}", tone="orange")
+        st.caption(f"{calorie - tdee:+,.0f} vs maintenance")
+
+    section_header("Daily macro targets", icon="🥗", level=5)
+    macro_columns = st.columns(4)
+    macro_specs = [
+        ("Protein", protein, "protein", "g", "4 kcal per gram"),
+        ("Carbohydrates", carbs, "carbs", "g", "4 kcal per gram"),
+        ("Fats", fats, "fats", "g", "9 kcal per gram"),
+        ("Fibre", fibre, "fibre", "g", "14 g per 1,000 kcal"),
+    ]
+    for column, (label, value, tone, unit, hint) in zip(macro_columns, macro_specs):
+        with column:
+            stat_tile(label, f"{value:.0f} {unit}", tone=tone, hint=hint)
+            progress_bar(
+                label=f"{label} target",
+                current=value,
+                target=value or 1.0,
+                tone=tone,
+                show_pct=False,
+            )
+
+    with st.expander("📈 Energy distribution of your daily target"):
+        energy = pd.DataFrame(
+            {
+                "Macro": ["Protein", "Carbohydrates", "Fats"],
+                "Calories from target": [
+                    protein * 4,
+                    carbs * 4,
+                    fats * 9,
+                ],
+            }
+        ).set_index("Macro")
+        st.bar_chart(
+            energy,
+            alt="Calorie contribution from protein, carbohydrates and fat targets",
+        )
+        st.caption(
+            "This chart splits your macro targets into their energy values. "
+            "Small differences from the calorie target are expected because "
+            "fibre and rounding are handled separately by the planner."
+        )
+
+    with st.expander("📚 How these numbers are calculated"):
+        st.markdown(
+            "- **BMI:** weight ÷ height².\n"
+            "- **BMR / RMR:** Mifflin–St Jeor equation.\n"
+            "- **TDEE:** BMR × activity multiplier (1.2 sedentary → 1.9 extra active).\n"
+            "- **Calories:** TDEE adjusted for your goal (−500 for weight loss, "
+            "+300 for muscle gain).\n"
+            "- **Protein:** 1.0–2.0 g per kg of body weight, based on your goal.\n"
+            "- **Fats:** about 27% of daily energy; **carbs** take the rest.\n"
+            "- **Fibre:** 14 g per 1,000 kcal."
+        )
+        render_badges(
+            [
+                {"label": "Calculated locally", "tone": "green", "icon": "🔒"},
+                {"label": "No medical claims", "tone": "blue", "icon": "ℹ️"},
+            ]
+        )
 
 
 def render_nutrition_dashboard(
     targets: Optional[dict[str, Any]],
     meal_plan: Optional[dict[str, Any]] = None,
+    weekly_plan: Optional[dict[str, Any]] = None,
     validation_result: Optional[dict[str, Any]] = None,
+    user_name: str = "User",
 ) -> None:
-    """Render the full nutrition KPI cards, target vs planned macros, and interactive charts."""
-    if not targets:
-        st.info("💡 Fill out your profile in the **User Profile** page and click **'Generate My Nutrition Plan'** to calculate targets.")
-        return
+    """Backwards-compatible alias for older callers."""
+    render_targets_panel(targets)
 
-    st.markdown("### 📊 Personalized Biometric & Nutrition Dashboard")
-    st.caption("Energy requirements and macronutrient partitions derived from the Mifflin-St Jeor equation and ICMR-NIN nutritional standards.")
 
-    # ── Section 1: Biometric & Caloric Metric Cards ─────────────────────────
-    bmi_val = targets.get("bmi", 0.0)
-    bmi_cat = targets.get("bmi_category", "Normal weight")
-    bmr_val = targets.get("bmr", 0.0)
-    tdee_val = targets.get("tdee", 0.0)
-    cal_target = targets.get("calorie_target", 2000.0)
-
-    # 4 Biometric Cards
-    st.markdown("#### Biometric Energy Requirements")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.metric(
-            label="BMI (Body Mass Index)",
-            value=f"{bmi_val:.1f} kg/m²",
-            help="WHO / ICMR classification",
-        )
-        st.caption(f"Category: **{bmi_cat}**")
-    with c2:
-        st.metric(
-            label="BMR (Mifflin-St Jeor)",
-            value=f"{bmr_val:.0f} kcal",
-            help="Basal Metabolic Rate: resting energy expenditure",
-        )
-        st.caption("Resting metabolic base")
-    with c3:
-        st.metric(
-            label="TDEE (Maintenance)",
-            value=f"{tdee_val:.0f} kcal",
-            help="Total Daily Energy Expenditure based on Physical Activity Level (PAL)",
-        )
-        st.caption("Weight-maintenance baseline")
-    with c4:
-        st.metric(
-            label="Daily Calorie Target",
-            value=f"{cal_target:.0f} kcal",
-            help="Target energy intake after goal adjustment (deficit/surplus)",
-        )
-        delta_cal = cal_target - tdee_val
-        st.caption(f"Adjustment: **{delta_cal:+.0f} kcal vs TDEE**")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # ── Section 2: Macronutrient Target Cards ───────────────────────────────
-    t_prot = targets.get("protein_g", 0.0)
-    t_carb = targets.get("carbs_g", 0.0)
-    t_fat = targets.get("fats_g", 0.0)
-    t_fib = targets.get("fiber_g", 0.0)
-
-    st.markdown("#### Daily Macronutrient & Fibre Targets")
-    m1, m2, m3, m4 = st.columns(4)
-    with m1:
-        st.metric(
-            label="Daily Protein Target",
-            value=f"{t_prot:.1f} g",
-            help="Target protein intake based on body weight and fitness goal",
-        )
-        prot_cals = t_prot * 4
-        prot_pct = (prot_cals / cal_target * 100) if cal_target > 0 else 0
-        st.caption(f"🔥 {prot_cals:.0f} kcal ({prot_pct:.0f}% of total energy)")
-
-    with m2:
-        st.metric(
-            label="Daily Carbohydrate Target",
-            value=f"{t_carb:.1f} g",
-            help="Remaining daily energy after protein and essential fat allocation",
-        )
-        carb_cals = t_carb * 4
-        carb_pct = (carb_cals / cal_target * 100) if cal_target > 0 else 0
-        st.caption(f"🔥 {carb_cals:.0f} kcal ({carb_pct:.0f}% of total energy)")
-
-    with m3:
-        st.metric(
-            label="Daily Fat Target",
-            value=f"{t_fat:.1f} g",
-            help="Essential healthy fats (approx. 27% of daily calories)",
-        )
-        fat_cals = t_fat * 9
-        fat_pct = (fat_cals / cal_target * 100) if cal_target > 0 else 0
-        st.caption(f"🔥 {fat_cals:.0f} kcal ({fat_pct:.0f}% of total energy)")
-
-    with m4:
-        st.metric(
-            label="Daily Dietary Fibre Target",
-            value=f"{t_fib:.1f} g",
-            help="Standard reference of 14g per 1000 kcal intake",
-        )
-        st.caption("Essential for gut motility & satiety")
-
-    st.divider()
-
-    # ── Section 3: Visual Charts ─────────────────────────────────────────────
-    st.markdown("#### 📈 Target Visualizations & Caloric Partitions")
-    ch_col1, ch_col2 = st.columns(2)
-
-    with ch_col1:
-        st.markdown("##### Energy Math (BMR vs TDEE vs Target)")
-        energy_df = pd.DataFrame({
-            "Stage": ["1. BMR (Resting)", "2. TDEE (Maintenance)", "3. Calorie Target (Goal)"],
-            "Calories (kcal/day)": [bmr_val, tdee_val, cal_target],
-        }).set_index("Stage")
-        st.bar_chart(energy_df)
-
-    with ch_col2:
-        st.markdown("##### Macronutrient Energy Contribution (kcal)")
-        macro_split_df = pd.DataFrame({
-            "Macronutrient": ["Protein (4 kcal/g)", "Carbohydrates (4 kcal/g)", "Fats (9 kcal/g)"],
-            "Calories (kcal)": [t_prot * 4, t_carb * 4, t_fat * 9],
-        }).set_index("Macronutrient")
-        st.bar_chart(macro_split_df)
-
-    st.markdown("##### Daily Target Quantities (Grams)")
-    grams_df = pd.DataFrame({
-        "Nutrient": ["Protein", "Carbohydrates", "Fats", "Dietary Fibre"],
-        "Target Grams": [t_prot, t_carb, t_fat, t_fib],
-    }).set_index("Nutrient")
-    st.bar_chart(grams_df)
-
-    st.divider()
-
-    # ── Section 4: Scientific Guidance Context ──────────────────────────────
-    st.markdown(
-        """
-        <div class="custom-card">
-            <div class="card-header">
-                <span>📚 Scientific Formulation Methodology</span>
-            </div>
-            <p style="font-size: 0.9rem; color: #4B5563; line-height: 1.5;">
-                • <strong>BMR Calculation:</strong> Computed via the gold-standard <em>Mifflin-St Jeor</em> formula, validated to be within 10% of true resting energy expenditure.<br>
-                • <strong>Activity Multipliers:</strong> PAL factors scale from 1.2 (Sedentary) up to 1.9 (Extra Active) following WHO/ICMR standards.<br>
-                • <strong>Macronutrient Distribution:</strong> Protein is tailored to your fitness goal (1.0–2.0 g/kg body weight), healthy fats are set at ~27% of energy for endocrine and lipid function, and unrefined carbohydrates supply the remaining energy.<br>
-                • <strong>Dietary Fibre:</strong> Calculated at 14 g per 1000 kcal intake to support healthy postprandial glucose regulation.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+__all__ = ["render_nutrition_dashboard", "render_targets_panel"]

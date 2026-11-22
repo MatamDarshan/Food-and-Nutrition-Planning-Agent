@@ -4,6 +4,15 @@ RAG (Retrieval-Augmented Generation) package for nutrition knowledge base.
 Provides document loading, chunking, local embeddings, persistent FAISS storage,
 and nutrition retrieval tools.
 """
+import os
+# Windows stability flags: disable tqdm monitor thread and tokenizer parallelism
+os.environ.setdefault("TQDM_DISABLE", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+try:
+    import tqdm
+    tqdm.tqdm.monitor_interval = 0
+except Exception:
+    pass
 
 from rag.document_loader import load_nutrition_documents
 from rag.text_splitter import split_nutrition_documents

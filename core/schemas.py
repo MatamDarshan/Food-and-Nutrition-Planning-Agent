@@ -208,6 +208,9 @@ class WeeklyAverages(BaseModel):
     target_fat: float
     target_fiber: float
     calorie_compliance: bool = True
+    macro_compliance: bool = True
+    macro_deviations: dict[str, float] = Field(default_factory=dict)
+    limitation_note: Optional[str] = None
     daily_calories: dict[str, float] = Field(default_factory=dict)
 
 

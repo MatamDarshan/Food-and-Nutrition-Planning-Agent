@@ -28,15 +28,34 @@ class Settings(BaseSettings):
         description="Google Gemini API Key",
     )
 
-    # Gemini model selection
+    # Gemini model selection.
+    # gemini-2.0-flash was retired by Google in 2026 (404 NOT_FOUND), so the
+    # officially available "flash-lite" alias is used by default. It supports
+    # tool calling and is the fastest generally-available flash model.
     model_name: str = Field(
-        default="gemini-2.0-flash",
+        default="gemini-flash-lite-latest",
         description="Selected Gemini model identifier",
     )
 
     temperature: float = Field(
         default=0.2,
         description="Model temperature for reasoning",
+    )
+
+    # Gemini call resilience: bound latency and retry transient failures.
+    max_output_tokens: int = Field(
+        default=8192,
+        description="Maximum tokens Gemini may generate per response",
+    )
+
+    request_timeout: float = Field(
+        default=120.0,
+        description="Per-request timeout in seconds for Gemini calls",
+    )
+
+    max_retries: int = Field(
+        default=2,
+        description="Retries for transient Gemini/network failures",
     )
 
     # Agent revision guard

@@ -12,6 +12,8 @@ from __future__ import annotations
 from typing import Literal, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from core.allergens import canonicalize_allergen
+
 
 # ── Enumerations (string literals for clean error messages) ───────────────────
 
@@ -115,22 +117,23 @@ class UserProfile(BaseModel):
     @field_validator("allergies", mode="before")
     @classmethod
     def normalise_allergies(cls, v: list) -> list[str]:
-        """Lowercase and strip all allergen tags."""
+        """Canonicalise allergen tags; synonyms such as ``milk`` become ``dairy``."""
         known = {
             "gluten", "dairy", "eggs", "fish",
-            "tree_nuts", "peanuts", "soy", "shellfish", "none",
+            "tree_nuts", "peanuts", "soy", "shellfish",
         }
         cleaned: list[str] = []
         for tag in v:
-            tag = str(tag).strip().lower()
-            if tag == "none":
+            canonical = canonicalize_allergen(tag)
+            if canonical is None:
                 continue
-            if tag not in known:
+            if canonical not in known:
                 raise ValueError(
                     f"Unknown allergen '{tag}'. "
-                    f"Valid tags: {sorted(known - {'none'})}"
+                    f"Valid tags: {sorted(known)}"
                 )
-            cleaned.append(tag)
+            if canonical not in cleaned:
+                cleaned.append(canonical)
         return cleaned
 
     @field_validator("excluded_foods", mode="before")

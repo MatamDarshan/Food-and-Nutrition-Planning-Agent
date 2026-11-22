@@ -18,9 +18,11 @@ from agent.graph import ALL_TOOLS, app_graph
 from rag.document_loader import load_nutrition_documents
 from rag.embeddings import get_embedding_model
 from rag.retriever import (
+    MAX_RELEVANCE_DISTANCE,
     format_retrieved_docs,
     get_retriever,
     retrieve_nutrition_knowledge,
+    retrieve_relevant_chunks,
     retrieve_relevant_documents,
     retrieve_with_details,
 )
@@ -271,3 +273,63 @@ class TestRAGAgentIntegration:
         assert any(w in final_text.lower() for w in ["millet", "ragi", "guidelines", "icmr-nin"]), (
             "Offline chat turn should leverage RAG knowledge base for nutrition guidance."
         )
+
+
+class TestRAGAnswerQuality:
+    """Tests for the readable, cited answer layer added on top of retrieval."""
+
+    @staticmethod
+    def _answer_body(output: str) -> str:
+        return output.split("**Supporting excerpts**")[0].strip()
+
+    def test_answer_is_clean_and_structured(self):
+        """The tool output must not leak PDF control characters or raw chunk dumps."""
+        output = retrieve_nutrition_knowledge.invoke(
+            {"query": "What are the nutritional benefits of millets like ragi and bajra?"}
+        )
+        assert "\x7f" not in output
+        assert not any(ord(ch) < 32 and ch not in "\n\t" for ch in output), (
+            "Retrieved output should not contain raw PDF control characters."
+        )
+        assert "**Answer" in output, "Output should contain a composed answer section."
+        assert "**Supporting excerpts**" in output
+        assert "**Sources**" in output
+        assert "[Source:" in output and "Page" in output
+        assert "Vector Distance" in output
+        assert "millet" in output.lower()
+
+    def test_answer_contains_the_asked_fact(self):
+        """The composed answer should surface the specific value asked about."""
+        iron_output = retrieve_nutrition_knowledge.invoke(
+            {"query": "What is the RDA for iron and how can absorption be enhanced?"}
+        )
+        iron_answer = self._answer_body(iron_output)
+        assert "19 mg" in iron_answer, f"Iron answer missed the RDA value: {iron_answer}"
+        assert "vitamin c" in iron_answer.lower(), "Iron answer should mention absorption enhancers."
+
+        calcium_output = retrieve_nutrition_knowledge.invoke(
+            {"query": "What are the top dietary sources of calcium in Indian diets?"}
+        )
+        calcium_answer = self._answer_body(calcium_output)
+        assert any(term in calcium_answer.lower() for term in ["ragi", "sesame", "344 mg"]), (
+            f"Calcium answer missed Indian food sources: {calcium_answer}"
+        )
+
+    def test_mmr_retrieval_returns_distinct_chunks(self):
+        """Diverse retrieval must not return the same chunk more than once."""
+        chunks = retrieve_relevant_chunks(
+            "What are the nutritional benefits of millets?",
+            k=3,
+            diverse=True,
+        )
+        chunk_ids = [doc.metadata.get("chunk_id") for doc, _ in chunks]
+        assert len(chunk_ids) == len(set(chunk_ids)), "MMR retrieval returned duplicate chunks."
+        assert all(score <= MAX_RELEVANCE_DISTANCE for _, score in chunks)
+
+    def test_irrelevant_queries_are_still_rejected(self):
+        """Answer composition must not weaken out-of-domain rejection."""
+        for query in ["How do I mine bitcoin with a GPU?", "What is the capital of Australia?"]:
+            output = retrieve_nutrition_knowledge.invoke({"query": query})
+            assert output.startswith("No relevant nutrition document sections were found")
+            assert "\x7f" not in output
+

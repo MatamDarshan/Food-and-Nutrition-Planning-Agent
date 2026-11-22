@@ -3,6 +3,22 @@ tests/conftest.py
 -----------------
 Pytest shared fixtures for UserProfile, NutritionTargets, and Food DataFrame.
 """
+import os
+
+# The suite is intentionally hermetic: it must produce identical results on a
+# developer machine with a real API key in .env and on a clean CI machine.
+# Force the documented deterministic/offline engine before any project module
+# (and therefore config.settings) is imported.
+os.environ["GOOGLE_API_KEY"] = ""
+os.environ.pop("GEMINI_API_KEY", None)
+
+os.environ.setdefault("TQDM_DISABLE", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+try:
+    import tqdm
+    tqdm.tqdm.monitor_interval = 0
+except Exception:
+    pass
 
 import pytest
 import pandas as pd

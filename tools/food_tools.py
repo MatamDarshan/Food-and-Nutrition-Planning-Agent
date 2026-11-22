@@ -22,17 +22,25 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import pandas as pd
 from langchain_core.tools import tool
 
+from config.settings import settings
+from core.allergens import (
+    canonicalize_allergens,
+    parse_food_allergens,
+    ingredients_contain_allergen,
+    food_violates_exclusion,
+)
 from core.validation import run_all_checks
 
 # ── Dataset loader (singleton) ────────────────────────────────────────────────
 
 _CACHE: dict[str, pd.DataFrame] = {}
-_CSV_PATH = Path(__file__).parent.parent / "data" / "food_data.csv"
+_DEFAULT_CSV_PATH = Path(__file__).parent.parent / "data" / "food_data.csv"
 
 MACRO_COLS = ["calories", "protein", "carbohydrates", "fats", "fiber"]
 
@@ -40,7 +48,10 @@ MACRO_COLS = ["calories", "protein", "carbohydrates", "fats", "fiber"]
 def _get_df() -> pd.DataFrame:
     """Return the food DataFrame, loading and caching it on first call."""
     if "df" not in _CACHE:
-        _CACHE["df"] = pd.read_csv(_CSV_PATH)
+        path = Path(settings.food_csv_path)
+        if not path.exists():
+            path = _DEFAULT_CSV_PATH
+        _CACHE["df"] = pd.read_csv(path)
     return _CACHE["df"]
 
 
@@ -57,21 +68,38 @@ def _diet_mask(df: pd.DataFrame, diet_type: str) -> pd.Series:
 
 
 def _allergen_mask(df: pd.DataFrame, allergies: list[str]) -> pd.Series:
-    """Exclude rows whose allergen field contains any of the user's allergens."""
-    mask = pd.Series([True] * len(df), index=df.index)
-    for allergen in allergies:
-        mask = mask & ~df["allergens"].str.contains(
-            allergen, case=False, regex=False, na=False
-        )
-    return mask
+    """Exclude rows containing any of the user's allergens in tag or ingredients.
+
+    Uses canonicalisation in ``core.allergens`` and checks both allergen tags and
+    individual ingredients within composite dishes.
+    """
+    if not allergies:
+        return pd.Series([True] * len(df), index=df.index)
+    user_allergens = canonicalize_allergens(allergies)
+    if not user_allergens:
+        return pd.Series([True] * len(df), index=df.index)
+
+    food_allergens = df["allergens"].map(parse_food_allergens)
+    tag_violation = food_allergens.map(lambda tags: bool(tags & user_allergens))
+
+    ing_col = df["ingredients"] if "ingredients" in df.columns else pd.Series([""] * len(df), index=df.index)
+    ing_violation = ing_col.map(lambda ing: bool(ingredients_contain_allergen(ing, allergies)))
+
+    return ~(tag_violation | ing_violation)
 
 
 def _excluded_mask(df: pd.DataFrame, excluded_foods: list[str]) -> pd.Series:
-    """Exclude rows whose food_name is in the user's exclusion list."""
+    """Exclude rows whose food_name, variant, or ingredients violate user exclusions."""
     if not excluded_foods:
         return pd.Series([True] * len(df), index=df.index)
-    excluded_lower = [f.lower() for f in excluded_foods]
-    return ~df["food_name"].str.lower().isin(excluded_lower)
+
+    def is_violated(row: pd.Series) -> bool:
+        fname = str(row.get("food_name", ""))
+        ing = row.get("ingredients", "")
+        violated, _ = food_violates_exclusion(fname, ing, excluded_foods)
+        return violated
+
+    return ~df.apply(is_violated, axis=1)
 
 
 def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
@@ -178,10 +206,23 @@ def calculate_meal_nutrition(items_json: str) -> str:
         Returns an error JSON object if a food name is not found.
     """
     try:
-        items: list[dict] = json.loads(items_json)
+        parsed = json.loads(items_json)
+        if not isinstance(parsed, list):
+            return json.dumps({"error": "items_json must be a JSON array."})
+        items: list[dict] = [item for item in parsed if isinstance(item, dict)]
+        if not items:
+            return json.dumps({"error": "items_json contains no valid food entries."})
+
         df = _get_df()
         name_index: dict[str, dict] = (
-            df.set_index("food_name")[MACRO_COLS].to_dict(orient="index")
+            df.assign(_key=df["food_name"].str.lower())
+            .set_index("_key")[MACRO_COLS]
+            .to_dict(orient="index")
+        )
+        canonical_names: dict[str, str] = (
+            df.assign(_key=df["food_name"].str.lower())
+            .set_index("_key")["food_name"]
+            .to_dict()
         )
 
         totals = dict.fromkeys(
@@ -191,19 +232,24 @@ def calculate_meal_nutrition(items_json: str) -> str:
         breakdown: list[dict] = []
 
         for item in items:
-            food_name = item.get("food_name", "")
-            qty_g = float(item.get("quantity_g", 0))
+            raw_name = str(item.get("food_name", "")).strip()
+            key = raw_name.lower()
+            food_name = canonical_names.get(key, raw_name)
+            try:
+                qty_g = float(item.get("quantity_g", 0))
+            except (TypeError, ValueError):
+                qty_g = 0.0
 
-            if food_name not in name_index:
+            if key not in name_index:
                 return json.dumps(
-                    {"error": f"Food '{food_name}' not found in the database."}
+                    {"error": f"Food '{raw_name}' not found in the database."}
                 )
             if qty_g <= 0:
                 return json.dumps(
-                    {"error": f"Quantity for '{food_name}' must be greater than 0 g."}
+                    {"error": f"Quantity for '{raw_name}' must be greater than 0 g."}
                 )
 
-            row = name_index[food_name]
+            row = name_index[key]
             scale = qty_g / 100.0
             item_nutrition = {
                 "food_name": food_name,
@@ -243,13 +289,14 @@ def find_food_substitutes(
     meal_type: str,
     allergies: list[str],
     top_n: int = 3,
+    excluded_foods: Optional[list[str]] = None,
 ) -> str:
     """Find the best nutritional substitutes for a given food item.
 
     Ranks candidates by cosine similarity on the macro vector
     [calories, protein, carbohydrates, fats, fiber], ensuring the
-    substitutes match the user's diet type, meal slot, and allergen
-    restrictions.
+    substitutes match the user's diet type, meal slot, allergen
+    restrictions, and personal food exclusions.
 
     Args:
         food_name: Exact name of the food to replace (e.g. 'Paneer').
@@ -259,6 +306,7 @@ def find_food_substitutes(
         allergies: Allergen tags to exclude from substitutes.
                    Use an empty list if no restrictions.
         top_n: Number of substitutes to return (default: 3).
+        excluded_foods: Food names the user never wants suggested.
 
     Returns:
         JSON string with a 'substitutes' list, each item containing:
@@ -271,12 +319,14 @@ def find_food_substitutes(
         df = _get_df()
 
         # ── find original food ─────────────────────────────────────────────
-        orig_rows = df[df["food_name"].str.lower() == food_name.lower()]
+        requested_name = str(food_name).strip()
+        orig_rows = df[df["food_name"].str.strip().str.lower() == requested_name.lower()]
         if orig_rows.empty:
             return json.dumps(
-                {"error": f"Food '{food_name}' not found in the database."}
+                {"error": f"Food '{requested_name}' not found in the database."}
             )
         orig = orig_rows.iloc[0]
+        orig_name = str(orig["food_name"])
         orig_vec = orig[MACRO_COLS].values.astype(float)
 
         # ── filter candidates ──────────────────────────────────────────────
@@ -284,7 +334,8 @@ def find_food_substitutes(
             _diet_mask(df, diet_type)
             & df["meal_type"].str.contains(meal_type, regex=False, na=False)
             & _allergen_mask(df, allergies)
-            & (df["food_name"].str.lower() != food_name.lower())   # exclude itself
+            & _excluded_mask(df, excluded_foods or [])
+            & (df["food_name"].str.lower() != orig_name.lower())   # exclude itself
         ].copy()
 
         if candidates.empty:
@@ -307,7 +358,7 @@ def find_food_substitutes(
         )
 
         return json.dumps(
-            {"original_food": food_name, "substitutes": top.to_dict(orient="records")},
+            {"original_food": orig_name, "substitutes": top.to_dict(orient="records")},
             indent=2,
         )
     except Exception as exc:
@@ -366,23 +417,35 @@ def validate_meal_plan(
             planned_calories, planned_protein, planned_carbs, planned_fats.
     """
     try:
-        plan: dict = json.loads(plan_json)
+        plan = json.loads(plan_json)
         df = _get_df()
 
         # ── calculate total planned nutrition via Tool 3 logic ─────────────
         name_index: dict[str, dict] = (
-            df.set_index("food_name")[MACRO_COLS].to_dict(orient="index")
+            df.assign(_key=df["food_name"].str.lower())
+            .set_index("_key")[MACRO_COLS]
+            .to_dict(orient="index")
         )
         planned = dict.fromkeys(MACRO_COLS, 0.0)
-        for meal, items in plan.items():
-            for item in items:
-                food_name = item.get("food_name", "")
-                qty_g = float(item.get("quantity_g", 0))
-                row = name_index.get(food_name)
-                if row and qty_g > 0:
-                    scale = qty_g / 100.0
-                    for col in MACRO_COLS:
-                        planned[col] += row[col] * scale
+        if isinstance(plan, dict):
+            for items in plan.values():
+                if isinstance(items, dict):
+                    items = [items]
+                if not isinstance(items, list):
+                    continue
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    key = str(item.get("food_name", "")).strip().lower()
+                    try:
+                        qty_g = float(item.get("quantity_g", 0))
+                    except (TypeError, ValueError):
+                        qty_g = 0.0
+                    row = name_index.get(key)
+                    if row and qty_g > 0:
+                        scale = qty_g / 100.0
+                        for col in MACRO_COLS:
+                            planned[col] += row[col] * scale
 
         planned_calories = round(planned["calories"], 1)
         planned_protein = round(planned["protein"], 1)

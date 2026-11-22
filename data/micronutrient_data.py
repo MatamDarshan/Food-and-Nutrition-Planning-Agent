@@ -15,6 +15,10 @@ PROVENANCE & ACCURACY PRINCIPLE:
 
 from typing import Optional, Any
 
+# Reference Population & Source Provenance
+RDA_POPULATION: str = "Healthy Indian Adults (19–65 years, Reference Man & Woman)"
+RDA_SOURCE: str = "ICMR-National Institute of Nutrition (NIN) RDA 2020 & IFCT 2017"
+
 # ICMR-NIN 2020 Recommended Dietary Allowances for Healthy Indian Adults
 RDA_REFERENCE: dict[str, dict[str, Any]] = {
     # Minerals
@@ -64,12 +68,12 @@ HOUSEHOLD_SERVINGS: dict[str, str] = {
     "Egg Curry": "2 eggs with curry gravy (approx. 180g)",
     "Fish Curry": "1 medium fish steak with gravy (approx. 180-200g)",
     "Mutton Curry": "2-3 pieces with curry gravy (approx. 180-200g)",
-    "Chicken Biryani": "1 plate (approx. 250-300g)",
-    "Basmati Rice": "1 standard katori (approx. 150g)",
-    "Whole Wheat Roti": "2-3 rotis (approx. 70-100g)",
-    "Brown Rice": "1 standard katori (approx. 150g)",
-    "Vegetable Khichdi": "1 bowl (approx. 200g)",
-    "Jeera Rice": "1 katori (approx. 150g)",
+    "Chicken Biryani": "1 plate (approx. 250-300g prepared)",
+    "Basmati Rice": "1 standard katori (approx. 150g cooked)",
+    "Whole Wheat Roti": "2-3 rotis (approx. 70-100g prepared)",
+    "Brown Rice": "1 standard katori (approx. 150g cooked)",
+    "Vegetable Khichdi": "1 bowl (approx. 200g cooked)",
+    "Jeera Rice": "1 katori (approx. 150g cooked)",
     "Tandoori Chicken": "1 leg quarter / 2 small pieces (approx. 150-180g)",
     "Egg Bhurji": "2 eggs scrambled (approx. 120g)",
     "Fish Fry": "1-2 fillets (approx. 120g)",

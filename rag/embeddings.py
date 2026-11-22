@@ -11,9 +11,12 @@ from typing import Optional
 from langchain_core.embeddings import Embeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 
-# Ensure local offline operation so HuggingFace does not attempt network checks if files are cached
-os.environ.setdefault("HF_HUB_OFFLINE", "1")
-os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+# Offline mode is opt-in. It is useful for air-gapped demos, but forcing it by
+# default prevents the model from ever being downloaded on a fresh machine.
+_OFFLINE = os.getenv("NUTRITION_OFFLINE", "").strip().lower() in {"1", "true", "yes", "on"}
+if _OFFLINE:
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 

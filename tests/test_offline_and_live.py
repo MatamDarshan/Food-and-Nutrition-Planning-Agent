@@ -87,7 +87,7 @@ def test_centralized_settings():
     """Verify settings use GOOGLE_API_KEY consistently."""
     assert hasattr(settings, "google_api_key")
     assert hasattr(settings, "api_key")
-    assert settings.model_name == "gemini-2.0-flash"
+    assert settings.model_name.startswith("gemini-")
 
 
 def test_all_five_tools_functional():

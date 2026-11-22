@@ -1,12 +1,12 @@
 # 🌿 AI-Based Food and Nutrition Planning Agent
 
-An autonomous Agentic AI system that computes personalized biometric energy requirements, searches curated Indian foods (ICMR-NIN), generates balanced 7-day meal plans (Monday to Sunday), calculates detailed macronutrients and micronutrients (Vitamins & Minerals), and self-validates dietary compliance using Google Gemini 2.0 Flash, LangGraph, and RAG.
+An autonomous Agentic AI system that computes personalized biometric energy requirements, searches curated Indian foods (ICMR-NIN), generates balanced 7-day meal plans (Monday to Sunday), calculates detailed macronutrients and micronutrients (Vitamins & Minerals), and self-validates dietary compliance using Google Gemini Flash, LangGraph, and RAG.
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Gemini](https://img.shields.io/badge/Google_Gemini-2.0_Flash-orange.svg)](https://deepmind.google/technologies/gemini/)
+[![Gemini](https://img.shields.io/badge/Google_Gemini-Flash-orange.svg)](https://deepmind.google/technologies/gemini/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2%2B-green.svg)](https://langchain-ai.github.io/langgraph/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.32%2B-red.svg)](https://streamlit.io/)
-[![Tests](https://img.shields.io/badge/Tests-86%20passed%20(100%25)-brightgreen.svg)](tests/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.50%2B-red.svg)](https://streamlit.io/)
+[![Tests](https://img.shields.io/badge/Tests-132%20passed%20(100%25)-brightgreen.svg)](tests/)
 [![RAG](https://img.shields.io/badge/RAG-FAISS%20%2B%20HuggingFace-blueviolet.svg)](rag/)
 
 ---
@@ -24,7 +24,7 @@ Dietary planning in India often suffers from:
 
 - **Scientific Calculation Engine:** Implement the **Mifflin-St Jeor** formula to calculate Basal Metabolic Rate (BMR), adjust for Physical Activity Level (PAL) to compute Total Daily Energy Expenditure (TDEE), and derive goal-specific daily macronutrient targets.
 - **Curated Indian Dataset:** Compile an authenticated 57-item Indian food composition dataset based on **ICMR-National Institute of Nutrition (NIN)** data with vegetarian, non-vegetarian, macronutrient, allergen, and glycemic index tags.
-- **Agentic AI & Self-Healing Loop:** Leverage **Google Gemini 2.0 Flash** bound with 5 specialized Python tools and a 7-node **LangGraph** StateGraph that automatically validates meal plans and triggers up to 2 corrective revisions if constraints are violated.
+- **Agentic AI & Self-Healing Loop:** Leverage **Google Gemini Flash** bound with 5 specialized Python tools and a 7-node **LangGraph** StateGraph that automatically validates meal plans and triggers up to 2 corrective revisions if constraints are violated. A model fallback chain and deterministic offline answers keep every feature working when a model is retired or the API is unreachable.
 - **Interactive Web Interface:** Provide a responsive Streamlit dashboard with biometric metric cards, meal-wise breakdown tables, distribution charts, and a multi-turn chat assistant with session memory.
 
 ---
@@ -33,14 +33,14 @@ Dietary planning in India often suffers from:
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| **AI Reasoning** | Google Gemini 2.0 Flash | Autonomous reasoning, tool calling, and dietary advice |
+| **AI Reasoning** | Google Gemini Flash (`gemini-flash-lite-latest`) | Autonomous reasoning, tool calling, and dietary advice |
 | **Agent Framework** | LangGraph & LangChain Core | StateGraph orchestration, conditional edges, memory checkpointer |
 | **Knowledge Retrieval (RAG)** | FAISS & HuggingFace (`all-MiniLM-L6-v2`) | Local dense vector retrieval over ICMR-NIN nutrition guidelines |
-| **Document Processing** | PyPDFLoader & RecursiveSplitter | PDF parsing, chunking (800 chars / 150 overlap) with metadata |
+| **Document Processing** | PyPDFLoader & RecursiveSplitter | PDF parsing, chunking (600 chars / 120 overlap) with metadata |
 | **Data & Descriptors** | Pandas & NumPy | Vectorized database filtering and cosine similarity ranking |
 | **Validation** | Pydantic v2 & Pydantic-Settings | Typed schemas, configuration management, strict input validation |
 | **User Interface** | Streamlit | Responsive dashboard, KPI cards, meal tables, and chat assistant |
-| **Testing** | Pytest & Pytest-Cov | 71-point automated test suite with 100% pass rate |
+| **Testing** | Pytest & Pytest-Cov | 132-test automated suite with 100% pass rate |
 
 ---
 
@@ -52,7 +52,7 @@ flowchart TD
     B -->|Valid| C[Nutrition Calculation Node\nMifflin-St Jeor & TDEE]
     B -->|Invalid| Z[Final Response Node\nDisplay Error]
     
-    C --> D{AI Agent Node\nGemini 2.0 Flash}
+    C --> D{AI Agent Node\nGemini Flash}
     
     D -->|Tool Call| E[Tool Execution Node\n5 Specialized Tools]
     E --> D
@@ -146,7 +146,8 @@ AI-Food-Nutrition-Agent/
 │   └── evaluate_rag.py                # 16-query RAG factual accuracy & rejection benchmark
 │
 ├── knowledge_base/
-│   ├── nutrition_documents/           # ICMR-NIN Dietary Guidelines for Indians PDF
+│   ├── nutrition_documents/           # Reference PDF used by the demo index (see note below)
+│   ├── build_sample_documents.py      # Regenerates the bundled reference PDF
 │   └── faiss_index/                   # Persisted FAISS index files (index.faiss, index.pkl)
 │
 ├── tests/
@@ -158,12 +159,20 @@ AI-Food-Nutrition-Agent/
 │   ├── test_functional_evaluation.py  # 7-scenario functional verification matrix (10 tests)
 │   ├── test_offline_and_live.py       # Offline fallback & live API routing tests (4 tests)
 │   ├── test_rag.py                    # Unit & integration tests for RAG pipeline (18 tests)
-│   └── test_7day_upgrade.py           # 15-scenario verification for 7-day meal planning & UI (15 tests)
+│   ├── test_7day_upgrade.py           # 15-scenario verification for 7-day meal planning & UI (15 tests)
+│   ├── test_complete_system_verification.py  # End-to-end system verification (10 tests)
+│   └── test_regressions.py            # Audit regression tests: parsing, safety & allergens (11 tests)
 │
 └── evidence/
     ├── evaluation_report.md           # Formal testing & evaluation benchmark report
     └── screenshots/                   # Execution evidence & UI captures
 ```
+
+> **Reference-document note:** `knowledge_base/nutrition_documents/` contains a
+> generated reference PDF used by the bundled demo index. Its text is a curated
+> summary written for demonstration, not the official ICMR-NIN publication. For
+> production use, replace it with the official ICMR-NIN Dietary Guidelines PDF
+> and rebuild the index with `python rag/vector_store.py --rebuild`.
 
 ---
 
@@ -197,9 +206,12 @@ cp .env.example .env
 Open `.env` and add your Google Gemini API key:
 ```ini
 GOOGLE_API_KEY=your_gemini_api_key_here
-MODEL_NAME=gemini-2.0-flash
+MODEL_NAME=gemini-flash-lite-latest
 ```
 *(Security Note: API keys are loaded strictly from the environment/.env on the backend. No API keys are ever requested or entered through the Streamlit web interface. If no API key is provided, the application automatically activates its deterministic offline ICMR-NIN demo planner).*
+
+The embedding model downloads once from HuggingFace on first use. For an
+air-gapped demo, pre-download the model and set `NUTRITION_OFFLINE=1`.
 
 ### 5. Build Knowledge Base & Run Application
 Initialize local FAISS vector storage from ICMR-NIN documents:
@@ -222,9 +234,9 @@ pytest tests/ -v
 ```
 
 ### Summary of Results
-- **Collected:** 86 test cases across 7 test modules
-- **Passed:** 86 (100% Pass Rate)
-- **Execution Time:** ~65 seconds
+- **Collected:** 132 test cases across 11 test modules
+- **Passed:** 132 (100% Pass Rate)
+- **Execution Time:** ~65 seconds (fully offline and deterministic)
 
 ### Module Breakdown
 | Test Module | Coverage Area | Status |
@@ -234,8 +246,12 @@ pytest tests/ -v
 | `test_agent.py` | LangGraph nodes, state routing, conditional edges, retry limits (9 tests) | ✅ 9 PASS |
 | `test_functional_evaluation.py` | End-to-end user journeys: Veg, Non-Veg, Allergies, Substitutions (10 tests) | ✅ 10 PASS |
 | `test_offline_and_live.py` | Graceful offline demo planner & chat fallback (4 tests) | ✅ 4 PASS |
-| `test_rag.py` | PDF loading, chunking, embeddings, FAISS search, distance rejection (18 tests) | ✅ 18 PASS |
+| `test_rag.py` | PDF loading, chunking, embeddings, FAISS search, distance rejection (22 tests) | ✅ 22 PASS |
 | `test_7day_upgrade.py` | 15-scenario verification: 7-day plans, allergens, micronutrients, calculations (15 tests) | ✅ 15 PASS |
+| `test_complete_system_verification.py` | End-to-end biometrics, tools, multi-user planning, RAG, chat, UI imports (10 tests) | ✅ 10 PASS |
+| `test_regressions.py` | Nested JSON parsing, malformed-plan safety, allergen consistency, stale state (11 tests) | ✅ 11 PASS |
+| `test_audit_validation_and_accuracy.py` | Audit of validation, micronutrients and profile-aware chat safety (13 tests) | ✅ 13 PASS |
+| `test_ui_frontend.py` | Streamlit AppTest smoke tests for all five pages and chips (8 tests) | ✅ 8 PASS |
 
 Run the dedicated 16-query RAG factual accuracy and rejection benchmark:
 ```bash

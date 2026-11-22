@@ -26,8 +26,8 @@ ENV/
 .coverage
 htmlcov/
 
-# Streamlit Cache
-.streamlit/
+# Streamlit local secrets (config.toml is intentionally tracked)
+.streamlit/secrets.toml
 *.log
 
 # IDE & Editor specific

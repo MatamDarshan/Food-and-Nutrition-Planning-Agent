@@ -236,7 +236,8 @@ def build_food_item_detail(
     food_df: pd.DataFrame,
 ) -> FoodItemDetail:
     """Compute food-level nutritional values and format serving description."""
-    match = food_df[food_df["food_name"] == food_name]
+    food_name = str(food_name).strip()
+    match = food_df[food_df["food_name"].str.lower() == food_name.lower()]
     if match.empty:
         # Fallback if unknown
         return FoodItemDetail(
@@ -298,9 +299,23 @@ def build_meal_detail(
     tot_fat = 0.0
     tot_fib = 0.0
 
+    # Accept a single object, ignore malformed entries, and tolerate bad
+    # quantities so a partially malformed LLM plan still renders.
+    if isinstance(items_raw, dict):
+        items_raw = [items_raw]
+    if not isinstance(items_raw, list):
+        items_raw = []
+
     for item in items_raw:
-        fname = item.get("food_name", "")
-        qty = float(item.get("quantity_g", 0.0))
+        if not isinstance(item, dict):
+            continue
+        fname = str(item.get("food_name", "")).strip()
+        try:
+            qty = float(item.get("quantity_g", 0.0))
+        except (TypeError, ValueError):
+            qty = 0.0
+        if not fname or qty <= 0:
+            continue
         detail = build_food_item_detail(fname, qty, food_df)
         food_items.append(detail)
         tot_cal += detail.calories
@@ -344,9 +359,14 @@ def build_day_plan_detail(
     all_day_items: list[dict] = []
 
     for slot in ["breakfast", "lunch", "snack", "dinner"]:
-        raw_items = meals_dict.get(slot, [])
-        all_day_items.extend(raw_items)
-        md = build_meal_detail(slot, raw_items, food_df)
+        raw_items = meals_dict.get(slot, []) if isinstance(meals_dict, dict) else []
+        if isinstance(raw_items, dict):
+            raw_items = [raw_items]
+        if not isinstance(raw_items, list):
+            raw_items = []
+        valid_items = [item for item in raw_items if isinstance(item, dict)]
+        all_day_items.extend(valid_items)
+        md = build_meal_detail(slot, valid_items, food_df)
         meals[slot] = md
         day_cal += md.total_calories
         day_prot += md.total_protein
@@ -407,10 +427,38 @@ def calculate_weekly_averages(
     avg_fat = round(sum_fat / n, 1)
     avg_fib = round(sum_fib / n, 1)
 
-    dev_from_target = abs(avg_cal - targets.calorie_target) / targets.calorie_target
-    compliant = dev_from_target <= 0.15
+    if targets.calorie_target > 0:
+        dev_from_target = abs(avg_cal - targets.calorie_target) / targets.calorie_target
+        compliant = dev_from_target <= 0.15
+    else:
+        compliant = False
 
     daily_cals = {d.day_name: d.total_calories for d in days}
+
+    cal_dev = round(((avg_cal - targets.calorie_target) / max(targets.calorie_target, 1.0)) * 100.0, 1) if targets.calorie_target > 0 else 0.0
+    prot_dev = round(((avg_prot - targets.protein_g) / max(targets.protein_g, 1.0)) * 100.0, 1) if targets.protein_g > 0 else 0.0
+    carb_dev = round(((avg_carb - targets.carbs_g) / max(targets.carbs_g, 1.0)) * 100.0, 1) if targets.carbs_g > 0 else 0.0
+    fat_dev = round(((avg_fat - targets.fats_g) / max(targets.fats_g, 1.0)) * 100.0, 1) if targets.fats_g > 0 else 0.0
+    fib_dev = round(((avg_fib - targets.fiber_g) / max(targets.fiber_g, 1.0)) * 100.0, 1) if targets.fiber_g > 0 else 0.0
+
+    macro_devs = {
+        "calories_pct": cal_dev,
+        "protein_pct": prot_dev,
+        "carbs_pct": carb_dev,
+        "fat_pct": fat_dev,
+        "fiber_pct": fib_dev,
+    }
+
+    # Macro compliance requires calories within +/- 15%, protein >= -15%, carbs within +/- 25%, fat within +/- 25%
+    macro_compliant = compliant and (prot_dev >= -15.0) and (abs(carb_dev) <= 25.0) and (abs(fat_dev) <= 25.0)
+
+    limitation_note = None
+    if fat_dev < -25.0:
+        limitation_note = (
+            f"Dietary Limitation Note: Planned weekly average fat ({avg_fat:.1f}g/day) is below theoretical target "
+            f"({targets.fats_g:.1f}g/day) due to user dietary restrictions (e.g. dairy or nuts excluded). "
+            f"Caloric energy is fulfilled with healthy complex carbohydrates and plant protein."
+        )
 
     return WeeklyAverages(
         avg_calories=avg_cal,
@@ -424,6 +472,9 @@ def calculate_weekly_averages(
         target_fat=targets.fats_g,
         target_fiber=targets.fiber_g,
         calorie_compliance=compliant,
+        macro_compliance=macro_compliant,
+        macro_deviations=macro_devs,
+        limitation_note=limitation_note,
         daily_calories=daily_cals,
     )
 

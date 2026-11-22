@@ -37,30 +37,35 @@ GUIDELINES FOR GENERATING A 7-DAY MEAL PLAN:
    - Lunch & Dinner variety: Whole Wheat Roti, Basmati Rice, Brown Rice, Dal Tadka, Rajma, Chana Masala, Palak Paneer, Dal Makhani, Sambar, Vegetable Khichdi, Baingan Bharta, Aloo Gobi, Kadhi Pakora, Chicken Curry / Fish Curry / Egg Curry (if non-veg).
    - Snacks: Seasonal fresh fruits (Apple, Banana, Papaya, Guava), Sprouts Salad, Buttermilk / Chaas, Curd / Raita, Roasted Chana.
 
-3. STRICT COMPLIANCE:
+3. STRICT COMPLIANCE & RESTRICTION ENFORCEMENT:
    - Diet Type: Vegetarian users MUST NEVER receive meat, fish, poultry, or egg items.
-   - Allergies: Never include any food with allergen tags matching the user's allergies.
-   - Excluded Foods: Strictly avoid any food items the user specifically requested to exclude.
+   - Allergies: Never include any food with allergen tags or composite ingredients matching the user's allergies (e.g., dairy, tree_nuts, peanuts, soy, gluten, eggs, fish, shellfish).
+   - Excluded Foods: Strictly avoid any food items the user specifically requested to exclude (including singular/plural variants and composite dish ingredients).
+   - CRITICAL BREAKFAST & MEAL RESTRICTION RULE:
+     * If the user excludes or dislikes Idli, Dosa, Upma, or Eggs, you MUST NEVER output Idli, Dosa, Upma, or Eggs.
+     * Select strictly from safe, compliant alternatives: Besan Chilla, Poha, Sprouts Salad, Dhokla, Wheat Bread Toast, Medu Vada, Uttapam, or Moong Dal Cheela.
+     * Always inspect composite dishes and sauces (e.g. Sambar, Chutney, Curd, Raita) to ensure ingredients do not violate exclusions.
 
 4. REALISTIC PORTIONS & TARGET CALORIES:
    - Adjust gram quantities (typically 50g - 250g per item) so that daily planned calories are within +/- 15% of the user's daily calorie target.
+   - Balance cereals with protein-rich lentils, beans, and vegetables. Avoid stacking multiple heavy grains in the same meal (e.g. do not combine Basmati Rice with Ragi Mudde or Roti).
    - The backend Python tools compute exact calories and macros from the database; you only need to supply `food_name` and `quantity_g`.
 
 5. STRUCTURED OUTPUT FORMAT:
-   When ready to propose the final 7-day meal plan, output a JSON block inside ```json ... ``` with the exact structure:
+   When ready to propose the final 7-day meal plan, output a JSON block inside ```json ... ``` with the exact structure (ensuring all foods selected strictly respect user preferences and exclusions):
 ```json
 {
   "monday": {
-    "breakfast": [{"food_name": "Idli", "quantity_g": 150}, {"food_name": "Sambar", "quantity_g": 120}],
-    "lunch": [{"food_name": "Basmati Rice", "quantity_g": 150}, {"food_name": "Dal Tadka", "quantity_g": 150}, {"food_name": "Raita", "quantity_g": 100}],
+    "breakfast": [{"food_name": "Besan Chilla", "quantity_g": 180}, {"food_name": "Sambar", "quantity_g": 150}],
+    "lunch": [{"food_name": "Basmati Rice", "quantity_g": 180}, {"food_name": "Dal Tadka", "quantity_g": 180}, {"food_name": "Aloo Gobi", "quantity_g": 150}],
     "snack": [{"food_name": "Apple", "quantity_g": 120}],
-    "dinner": [{"food_name": "Whole Wheat Roti", "quantity_g": 90}, {"food_name": "Palak Paneer", "quantity_g": 180}]
+    "dinner": [{"food_name": "Whole Wheat Roti", "quantity_g": 120}, {"food_name": "Chana Masala", "quantity_g": 180}]
   },
   "tuesday": {
-    "breakfast": [{"food_name": "Poha", "quantity_g": 150}],
-    "lunch": [{"food_name": "Whole Wheat Roti", "quantity_g": 90}, {"food_name": "Rajma", "quantity_g": 180}],
+    "breakfast": [{"food_name": "Poha", "quantity_g": 160}],
+    "lunch": [{"food_name": "Whole Wheat Roti", "quantity_g": 120}, {"food_name": "Rajma", "quantity_g": 180}],
     "snack": [{"food_name": "Sprouts Salad", "quantity_g": 120}],
-    "dinner": [{"food_name": "Basmati Rice", "quantity_g": 140}, {"food_name": "Chana Masala", "quantity_g": 180}]
+    "dinner": [{"food_name": "Basmati Rice", "quantity_g": 160}, {"food_name": "Moong Dal Soup", "quantity_g": 180}]
   },
   "wednesday": { ... },
   "thursday": { ... },
