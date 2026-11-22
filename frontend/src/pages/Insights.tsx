@@ -53,11 +53,21 @@ export function Insights() {
   const planId = useApp((s) => s.planId);
   const [data, setData] = useState<InsightData | null>(null);
   const [error, setError] = useState('');
+  const [prevPlanId, setPrevPlanId] = useState(planId);
+
+  if (prevPlanId !== planId) {
+    setPrevPlanId(planId);
+    setData(null);
+    setError('');
+  }
 
   useEffect(() => {
     if (!planId) return;
-    setError('');
-    insightsApi.get(planId).then(setData).catch((e) => setError(messageOf(e)));
+    let active = true;
+    insightsApi.get(planId)
+      .then((result) => { if (active) setData(result); })
+      .catch((e) => { if (active) setError(messageOf(e)); });
+    return () => { active = false; };
   }, [planId]);
 
   if (!plan) return <EmptyPlan label="Create a plan to see insights" />;

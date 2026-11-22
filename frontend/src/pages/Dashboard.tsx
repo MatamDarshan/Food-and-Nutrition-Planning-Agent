@@ -54,17 +54,21 @@ export function Dashboard() {
     if (planId) insightsApi.get(planId).then(setInsights).catch(() => setInsights(null));
   }, [planId]);
 
+  const [todayKey] = useState(() => new Date().toDateString());
+  const [todayIndex] = useState(() => {
+    const day = new Date().getDay();
+    return day === 0 ? 6 : day - 1;
+  });
   const consumed = useMemo(() => {
-    const today = new Date().toDateString();
     return history
-      .filter((entry) => new Date(String(entry.eaten_at)).toDateString() === today)
+      .filter((entry) => new Date(String(entry.eaten_at)).toDateString() === todayKey)
       .reduce((sum, entry) => sum + Number(entry.total_calories || entry.calories || 0), 0);
-  }, [history]);
+  }, [history, todayKey]);
 
   if (!hydrated) return <DashboardSkeleton />;
   if (!plan || !targets) return <EmptyPlan />;
 
-  const today = plan.days[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1] || plan.days[0];
+  const today = plan.days[todayIndex] || plan.days[0];
   const avg = plan.weekly_averages;
   const macroData = [
     { name: 'Protein', value: avg.avg_protein, target: targets.protein_g, color: '#219e68' },

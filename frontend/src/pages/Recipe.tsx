@@ -23,14 +23,27 @@ export function Recipe() {
   const favorites = useApp((s) => s.favorites);
   const setFavorites = useApp((s) => s.setFavorites);
   const setHistory = useApp((s) => s.setHistory);
-  const [plan, setPlan] = useState<Plan | null>(storedPlan);
-  const [loading, setLoading] = useState(!storedPlan);
+  const [fetchedPlan, setFetchedPlan] = useState<Plan | null>(null);
+  const [loading, setLoading] = useState(!storedPlan && !!planId);
+  const [prevPlanId, setPrevPlanId] = useState(planId);
+
+  if (prevPlanId !== planId) {
+    setPrevPlanId(planId);
+    setFetchedPlan(null);
+    setLoading(!storedPlan && !!planId);
+  }
 
   useEffect(() => {
-    if (storedPlan) { setPlan(storedPlan); return; }
-    if (!planId) { setLoading(false); return; }
-    planApi.get(planId).then((res) => setPlan(res.plan)).catch(() => toast.error('Could not load this recipe')).finally(() => setLoading(false));
+    if (storedPlan || !planId) return;
+    let active = true;
+    planApi.get(planId)
+      .then((res) => { if (active) setFetchedPlan(res.plan); })
+      .catch(() => { if (active) toast.error('Could not load this recipe'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [planId, storedPlan]);
+
+  const plan = storedPlan || fetchedPlan;
 
   if (loading) return <div className="np-card h-96 animate-pulse" />;
   if (!plan) return <EmptyPlan label="Create a plan first" />;

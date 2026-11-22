@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { fallbackImage } from '../lib/utils';
 
 const PHOTOS: Record<string, string> = {
@@ -26,18 +26,16 @@ export function FoodImage({
   eager?: boolean;
 }) {
   const key = Object.keys(PHOTOS).find((k) => slot.toLowerCase().includes(k));
-  const [current, setCurrent] = useState<string>(src || (key ? PHOTOS[key] : PHOTOS.lunch));
-
-  useEffect(() => {
-    setCurrent(src || (key ? PHOTOS[key] : PHOTOS.lunch));
-  }, [src, key]);
+  const base = src || (key ? PHOTOS[key] : PHOTOS.lunch);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const current = failedSrc === base ? fallbackImage(slot) : base;
 
   return (
     <img
       src={current}
       alt={alt}
       loading={eager ? 'eager' : 'lazy'}
-      onError={() => setCurrent(fallbackImage(slot))}
+      onError={() => setFailedSrc(base)}
       className={`bg-brand-50 object-cover ${className}`}
     />
   );

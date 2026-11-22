@@ -18,16 +18,29 @@ export function Grocery() {
   const checked = useApp((s) => s.checked);
   const setChecked = useApp((s) => s.setChecked);
   const [items, setItems] = useState<GroceryItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!!planId);
   const [error, setError] = useState('');
+  const [prevPlanId, setPrevPlanId] = useState(planId);
+
+  if (prevPlanId !== planId) {
+    setPrevPlanId(planId);
+    setLoading(!!planId);
+    setError('');
+    setItems([]);
+  }
 
   useEffect(() => {
-    if (!planId) { setLoading(false); return; }
-    setLoading(true);
+    if (!planId) return;
+    let active = true;
     groceryApi.get(planId)
-      .then((data) => { setItems(data.items); setChecked(data.checked); })
-      .catch((e) => setError(messageOf(e)))
-      .finally(() => setLoading(false));
+      .then((data) => {
+        if (!active) return;
+        setItems(data.items);
+        setChecked(data.checked);
+      })
+      .catch((e) => { if (active) setError(messageOf(e)); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [planId, setChecked]);
 
   const groups = useMemo(() => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Apple, Bot, BookOpen, ChartNoAxesCombined, ChevronRight, Heart, LayoutDashboard,
@@ -25,8 +25,12 @@ export function Layout() {
   const reset = useApp((s) => s.reset);
   const location = useLocation();
   const navigate = useNavigate();
+  const [prevPath, setPrevPath] = useState(location.pathname);
 
-  useEffect(() => setOpen(false), [location.pathname]);
+  if (prevPath !== location.pathname) {
+    setPrevPath(location.pathname);
+    setOpen(false);
+  }
 
   const signout = async () => {
     await authApi.signout();
