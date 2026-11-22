@@ -24,6 +24,7 @@ export function ProfilePage() {
   const [preview, setPreview] = useState<Targets | null>(targets);
   const [saving, setSaving] = useState(false);
   const [calculating, setCalculating] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (!form) profileApi.get().then(setForm).catch(() => undefined);
@@ -42,6 +43,19 @@ export function ProfilePage() {
       toast.error(messageOf(error));
     } finally {
       setCalculating(false);
+    }
+  };
+
+  const exportPlan = async () => {
+    if (!planId) return;
+    setExporting(true);
+    try {
+      await planApi.export(planId);
+      toast.success('Plan exported as PDF');
+    } catch (error) {
+      toast.error(messageOf(error));
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -70,8 +84,9 @@ export function ProfilePage() {
         title="My profile"
         description="Keep your preferences current so every meal stays aligned with your goals."
         action={planId ? (
-          <Button asChild variant="outline">
-            <a href={planApi.exportUrl(planId)} download><Download className="h-4 w-4" /> Export plan</a>
+          <Button variant="outline" onClick={() => void exportPlan()} disabled={exporting}>
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Export PDF
           </Button>
         ) : undefined}
       />

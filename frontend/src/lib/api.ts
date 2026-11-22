@@ -111,8 +111,18 @@ export const planApi = {
     });
     return data;
   },
-  exportUrl(planId: string) {
-    return `${BASE_URL}/api/plans/${planId}/export`;
+  async export(planId: string): Promise<void> {
+    const { data } = await api.get<Blob>(`/api/plans/${planId}/export`, {
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'nutriplan-7-day-plan.pdf';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
   },
 };
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertCircle, CheckCircle2, Download, RefreshCw, ShoppingBasket, Sparkles } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Download, Loader2, RefreshCw, ShoppingBasket, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { messageOf, planApi } from '../lib/api';
 import { useApp } from '../lib/store';
@@ -17,6 +17,7 @@ export function Planner() {
   const setPlan = useApp((s) => s.setPlan);
   const [day, setDay] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   if (!plan || !planId) return <EmptyPlan label="Build my planner" />;
 
@@ -39,6 +40,18 @@ export function Planner() {
     }
   };
 
+  const exportPlan = async () => {
+    setExporting(true);
+    try {
+      await planApi.export(planId);
+      toast.success('Plan exported as PDF');
+    } catch (error) {
+      toast.error(messageOf(error));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const validation = plan.validation_result;
 
   return (
@@ -50,10 +63,9 @@ export function Planner() {
         action={
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline"><Link to="/app/grocery"><ShoppingBasket className="h-4 w-4" /> Grocery list</Link></Button>
-            <Button asChild>
-              <a href={planApi.exportUrl(planId)} download>
-                <Download className="h-4 w-4" /> Export plan
-              </a>
+            <Button onClick={() => void exportPlan()} disabled={exporting}>
+              {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Export PDF
             </Button>
           </div>
         }

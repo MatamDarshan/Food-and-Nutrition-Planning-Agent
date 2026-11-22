@@ -114,7 +114,9 @@ def test_grocery_insights_and_export(auth: dict[str, str]) -> None:
     assert len(insights.json()["micronutrients"]) == 17
     exported = client.get(f"/api/plans/{plan_id}/export", headers=auth)
     assert exported.status_code == 200
-    assert "7-Day Nutrition Plan" in exported.text
+    assert exported.headers["content-type"].startswith("application/pdf")
+    assert "nutriplan-7-day-plan.pdf" in exported.headers.get("content-disposition", "")
+    assert exported.content.startswith(b"%PDF")
 
 
 def test_partial_swap_and_regenerate(auth: dict[str, str]) -> None:

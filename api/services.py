@@ -466,46 +466,94 @@ def insights(plan: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def export_plan(plan: dict[str, Any], profile: dict[str, Any]) -> str:
+def export_plan(plan: dict[str, Any], profile: dict[str, Any]) -> bytes:
+    """Render the 7-day plan as a downloadable PDF."""
+    from io import BytesIO
+
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=16 * mm,
+        rightMargin=16 * mm,
+        topMargin=16 * mm,
+        bottomMargin=16 * mm,
+        title="NutriPlan 7-Day Nutrition Plan",
+    )
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="NPTitle", parent=styles["Title"], fontSize=22, leading=26, textColor=colors.HexColor("#14532d"), spaceAfter=8))
+    styles.add(ParagraphStyle(name="NPSub", parent=styles["Normal"], fontSize=10, leading=14, textColor=colors.HexColor("#475569"), spaceAfter=12))
+    styles.add(ParagraphStyle(name="NPDay", parent=styles["Heading2"], fontSize=14, leading=18, textColor=colors.HexColor("#166534"), spaceBefore=10, spaceAfter=6))
+    styles.add(ParagraphStyle(name="NPMeal", parent=styles["Heading3"], fontSize=11, leading=14, textColor=colors.HexColor("#0f172a"), spaceBefore=6, spaceAfter=2))
+    styles.add(ParagraphStyle(name="NPBody", parent=styles["Normal"], fontSize=9, leading=12, textColor=colors.HexColor("#334155"), spaceAfter=2))
+    styles.add(ParagraphStyle(name="NPSmall", parent=styles["Normal"], fontSize=8, leading=10, textColor=colors.HexColor("#64748b"), spaceAfter=6))
+
     targets = plan.get("user_targets") or {}
-    lines = [
-        f"# {profile.get('name', 'My')}'s 7-Day Nutrition Plan",
-        "",
-        f"Daily target: **{float(targets.get('calorie_target', 0)):.0f} kcal** · "
-        f"Protein {float(targets.get('protein_g', 0)):.0f} g · "
-        f"Carbs {float(targets.get('carbs_g', 0)):.0f} g · "
-        f"Fats {float(targets.get('fats_g', 0)):.0f} g",
-        "",
-        " nutrition information is derived from ICMR-NIN RDA 2020 and IFCT 2017.",
-        "",
+    name = str(profile.get("name") or "My")
+    story = [
+        Paragraph(f"{name}'s 7-Day Nutrition Plan", styles["NPTitle"]),
+        Paragraph(
+            f"Daily target: <b>{float(targets.get('calorie_target', 0)):.0f} kcal</b> · "
+            f"Protein {float(targets.get('protein_g', 0)):.0f} g · "
+            f"Carbs {float(targets.get('carbs_g', 0)):.0f} g · "
+            f"Fats {float(targets.get('fats_g', 0)):.0f} g",
+            styles["NPSub"],
+        ),
+        Paragraph(
+            "Nutrition information is derived from ICMR-NIN RDA 2020 and IFCT 2017. "
+            "Recipe steps are suggested preparation guidance; macros are calculated from IFCT quantities.",
+            styles["NPSmall"],
+        ),
     ]
+
     for day in plan.get("days") or []:
-        lines.extend(
-            [
-                f"## {day.get('day_name')}",
-                f"**{float(day.get('total_calories') or 0):.0f} kcal** · "
-                f"P {float(day.get('total_protein') or 0):.0f} g · "
-                f"C {float(day.get('total_carbs') or 0):.0f} g · "
-                f"F {float(day.get('total_fat') or 0):.0f} g",
-                "",
-            ]
+        day_name = str(day.get("day_name") or "Day")
+        totals = (
+            f"{float(day.get('total_calories') or 0):.0f} kcal · "
+            f"P {float(day.get('total_protein') or 0):.0f} g · "
+            f"C {float(day.get('total_carbs') or 0):.0f} g · "
+            f"F {float(day.get('total_fat') or 0):.0f} g"
         )
+        story.append(Paragraph(f"{day_name} <font color='#475569' size='9'>— {totals}</font>", styles["NPDay"]))
+
         for slot, meal in (day.get("meals") or {}).items():
-            lines.append(f"### {str(slot).title()}")
+            meal_title = str(slot).replace("_", " ").title()
+            story.append(Paragraph(meal_title, styles["NPMeal"]))
+            rows = [["Food", "Quantity", "Serving"]]
             for item in meal.get("items") or []:
-                lines.append(
-                    f"- {item.get('food_name')} — {float(item.get('quantity_g') or 0):.0f} g "
-                    f"({item.get('serving_display', '')})"
-                )
-            lines.append(
+                rows.append([
+                    Paragraph(str(item.get("food_name") or ""), styles["NPBody"]),
+                    f"{float(item.get('quantity_g') or 0):.0f} g",
+                    str(item.get("serving_display") or ""),
+                ])
+            table = Table(rows, colWidths=[78 * mm, 28 * mm, 58 * mm], repeatRows=1)
+            table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#ecfdf5")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#166534")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#cbd5e1")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("PADDING", (0, 0), (-1, -1), 4),
+            ]))
+            story.append(table)
+            story.append(Paragraph(
                 f"Meal total: {float(meal.get('total_calories') or 0):.0f} kcal · "
                 f"{float(meal.get('total_protein') or 0):.0f} g protein · "
-                f"{meal.get('total_time_minutes', 20)} min prep"
-            )
-            lines.append("")
-        lines.append("---")
-        lines.append("")
-    return "\n".join(lines)
+                f"{int(meal.get('total_time_minutes') or 20)} min prep",
+                styles["NPSmall"],
+            ))
+        story.append(Spacer(1, 2 * mm))
+
+    doc.build(story)
+    return buffer.getvalue()
 
 
 # ── Chat ──────────────────────────────────────────────────────────────────────

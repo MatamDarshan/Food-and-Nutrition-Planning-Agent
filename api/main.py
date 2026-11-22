@@ -11,7 +11,7 @@ from typing import Any, Optional
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from api import services, store
@@ -261,13 +261,13 @@ def recipe(
 @app.get("/api/plans/{plan_id}/export")
 def export(
     plan_id: str, user: dict[str, str] = Depends(current_user)
-) -> Any:
+) -> Response:
     record = _require_plan(user["id"], plan_id)
     content = services.export_plan(record["plan"], record["profile"])
-    return PlainTextResponse(
-        content,
-        media_type="text/markdown",
-        headers={"Content-Disposition": 'attachment; filename="nutriplan-7-day-plan.md"'},
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="nutriplan-7-day-plan.pdf"'},
     )
 
 
