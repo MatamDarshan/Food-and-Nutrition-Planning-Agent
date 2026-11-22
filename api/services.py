@@ -484,7 +484,7 @@ def export_plan(plan: dict[str, Any], profile: dict[str, Any]) -> bytes:
         rightMargin=16 * mm,
         topMargin=16 * mm,
         bottomMargin=16 * mm,
-        title="NutriPlan 7-Day Nutrition Plan",
+        title="AI-Based Food and Nutrition Planning Agent - 7-Day Plan",
     )
     styles = getSampleStyleSheet()
     styles.add(ParagraphStyle(name="NPTitle", parent=styles["Title"], fontSize=22, leading=26, textColor=colors.HexColor("#14532d"), spaceAfter=8))

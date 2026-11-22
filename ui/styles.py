@@ -1,7 +1,7 @@
 """
 ui/styles.py
 ------------
-Central visual theme for the NutriPlan frontend.
+Central visual theme for the AI Nutrition Planner frontend.
 
 The app deliberately uses a custom, colourful CSS layer because the brief asks
 for a premium health-tech look that native Streamlit theming alone cannot

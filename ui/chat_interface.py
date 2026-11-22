@@ -139,7 +139,7 @@ def _ask(
         with st.spinner("Checking your plan and ICMR-NIN guidance..."):
             st.markdown(
                 '<div class="np-typing"><i></i><i></i><i></i> '
-                "NutriPlan is thinking…</div>",
+                "AI Nutrition Planner is thinking…</div>",
                 unsafe_allow_html=True,
             )
             try:

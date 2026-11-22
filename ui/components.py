@@ -1,7 +1,7 @@
 """
 ui/components.py
 ----------------
-Reusable visual building blocks for the NutriPlan frontend.
+Reusable visual building blocks for the AI Nutrition Planner frontend.
 
 Every helper is presentation-only.  No nutrition, validation, retrieval or
 agent logic lives here; callers pass already-calculated values and the helper

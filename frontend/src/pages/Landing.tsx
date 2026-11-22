@@ -41,7 +41,7 @@ export function Landing() {
       const { user } = await authApi.demo();
       useApp.getState().setUser(user);
       await hydrate();
-      toast.success('Welcome to NutriPlan!');
+      toast.success('Welcome to AI Nutrition Planner!');
       navigate(useApp.getState().plan ? '/app/dashboard' : '/onboarding');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not start the demo');
@@ -58,7 +58,7 @@ export function Landing() {
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-600 text-white shadow-glow">
               <Apple className="h-5 w-5" />
             </span>
-            <span className="font-display text-lg font-extrabold">NutriPlan</span>
+            <span className="font-display text-lg font-extrabold">AI Nutrition Planner</span>
           </Link>
           <nav className="hidden items-center gap-8 text-sm font-semibold text-muted-foreground md:flex">
             <a href="#how" className="hover:text-brand-700">How it works</a>
@@ -267,7 +267,7 @@ export function Landing() {
 
       <footer className="border-t border-brand-100 bg-white py-8">
         <div className="np-container flex flex-wrap items-center justify-between gap-4 text-xs text-muted-foreground">
-          <div className="flex items-center gap-2"><Apple className="h-4 w-4 text-brand-600" /><span className="font-bold text-ink">NutriPlan</span> · Indian nutrition, made personal.</div>
+          <div className="flex items-center gap-2"><Apple className="h-4 w-4 text-brand-600" /><span className="font-bold text-ink">AI-Based Food and Nutrition Planning Agent</span> · Indian nutrition, made personal.</div>
           <p>Nutrition data: ICMR-NIN RDA 2020 · IFCT 2017. Educational guidance only.</p>
         </div>
       </footer>

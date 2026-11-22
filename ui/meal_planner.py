@@ -1,7 +1,7 @@
 """
 ui/meal_planner.py
 ------------------
-Today and My week pages for the NutriPlan frontend.
+Today and My week pages for the AI Nutrition Planner frontend.
 
 The module keeps the original data-shaping helpers (portion cleanup, 7-day
 fallback, grocery totals) intact and replaces only the presentation layer with
@@ -501,7 +501,7 @@ def render_today_page(
     if not targets:
         empty_state(
             "Let's build your first plan",
-            "Add a few details about yourself and NutriPlan will calculate your "
+            "Add a few details about yourself and the AI Nutrition Planner will calculate your "
             "targets and design seven days of Indian meals.",
             icon="👤",
             action_label="＋ Create my profile",

@@ -115,7 +115,7 @@ def test_grocery_insights_and_export(auth: dict[str, str]) -> None:
     exported = client.get(f"/api/plans/{plan_id}/export", headers=auth)
     assert exported.status_code == 200
     assert exported.headers["content-type"].startswith("application/pdf")
-    assert "nutriplan-7-day-plan.pdf" in exported.headers.get("content-disposition", "")
+    assert "ai-nutrition-7-day-plan.pdf" in exported.headers.get("content-disposition", "")
     assert exported.content.startswith(b"%PDF")
 
 

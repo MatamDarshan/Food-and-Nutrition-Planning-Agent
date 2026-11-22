@@ -1,7 +1,7 @@
 """
 ui/profile_form.py
 ------------------
-Polished profile creation and editing for NutriPlan.
+Polished profile creation and editing for the AI Nutrition Planner.
 
 The form keeps the original token-based widget recreation strategy.  Whenever a
 preset, a blank form or a profile switch changes the draft, ``profile_form_token``

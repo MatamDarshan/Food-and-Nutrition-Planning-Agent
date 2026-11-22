@@ -1,7 +1,7 @@
 """
 ui/layout.py
 ------------
-Page shells, hero headers and the shared sidebar for NutriPlan.
+Page shells, hero headers and the shared sidebar for the AI Nutrition Planner.
 
 These helpers keep page modules focused on content while giving every screen a
 consistent, premium health-tech frame.  They contain no business logic beyond
@@ -40,7 +40,7 @@ def render_today_hero(
     user_name: str,
     badges: Sequence[Mapping[str, str]],
     subtitle: str = "Your personalised nutrition plan for today",
-    eyebrow: str = "NutriPlan · Daily dashboard",
+    eyebrow: str = "AI Nutrition Planner · Daily dashboard",
 ) -> None:
     """Render the large welcome banner used as the default-page header."""
     safe_name = escape(str(user_name or "there"))
@@ -82,7 +82,7 @@ def render_sidebar(
         _html(
             '<div class="np-sidebar-brand">'
             '<div class="np-sidebar-mark">🌿</div>'
-            "<div><h2>NutriPlan</h2>"
+            "<div><h2>AI Nutrition Planner</h2>"
             "<p>Personalised Indian meals<br>ICMR-NIN informed</p></div>"
             "</div>"
         )

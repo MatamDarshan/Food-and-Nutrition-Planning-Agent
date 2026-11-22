@@ -337,7 +337,7 @@ export function Onboarding() {
       <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-5 py-8">
         <Link to="/" className="inline-flex items-center gap-2 self-start">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-600 text-white"><Apple className="h-5 w-5" /></span>
-          <span className="font-display font-extrabold">NutriPlan</span>
+          <span className="font-display font-extrabold">AI Nutrition Planner</span>
         </Link>
 
         <div className="mt-8">

@@ -54,7 +54,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
         <div className="w-full max-w-md">
           <Link to="/" className="inline-flex items-center gap-2.5">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-600 text-white shadow-glow"><Apple className="h-5 w-5" /></span>
-            <span className="font-display text-lg font-extrabold">NutriPlan</span>
+            <span className="font-display text-lg font-extrabold">AI Nutrition Planner</span>
           </Link>
           <h1 className="mt-9 text-3xl font-extrabold">{isSignup ? 'Create your account' : 'Welcome back'}</h1>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -90,7 +90,7 @@ export function Auth({ mode }: { mode: 'signin' | 'signup' }) {
           </Button>
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
-            {isSignup ? 'Already have an account?' : 'New to NutriPlan?'}{' '}
+            {isSignup ? 'Already have an account?' : 'New to AI Nutrition Planner?'}{' '}
             <Link to={isSignup ? '/signin' : '/signup'} className="font-bold text-brand-700 hover:underline">
               {isSignup ? 'Sign in' : 'Create one'}
             </Link>

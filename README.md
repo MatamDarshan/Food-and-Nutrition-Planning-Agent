@@ -1,4 +1,4 @@
-# 🌿 NutriPlan — AI Food and Nutrition Planning Agent
+# 🌿 AI-Based Food and Nutrition Planning Agent
 
 A production-style nutrition product with a React + TypeScript frontend, a FastAPI REST layer, and the original LangGraph/Gemini/FAISS engine as the source of truth. It computes personalized energy requirements from curated Indian food data (ICMR-NIN/IFCT), builds balanced 7-day meal plans, tracks macros plus 17 micronutrients, and explains every recommendation through a cited AI Nutritionist.
 

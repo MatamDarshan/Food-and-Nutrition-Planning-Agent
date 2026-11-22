@@ -53,7 +53,7 @@ export function Layout() {
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-600 text-white shadow-glow">
             <Apple className="h-5 w-5" />
           </span>
-          <span className="font-display text-lg font-extrabold tracking-tight">NutriPlan</span>
+          <span className="font-display text-lg font-extrabold tracking-tight">AI Nutrition Planner</span>
         </Link>
 
         <nav className="np-scrollbar flex-1 space-y-1 overflow-y-auto px-3">
@@ -121,7 +121,7 @@ export function Layout() {
             <Menu className="h-5 w-5" />
           </button>
           <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-brand-600">NutriPlan</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-brand-600">AI Nutrition Planner</p>
             <h1 className="truncate text-base font-bold sm:text-lg">{active?.label || 'Dashboard'}</h1>
           </div>
           <div className="ml-auto flex items-center gap-2">

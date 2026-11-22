@@ -29,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DIST_DIR = BASE_DIR / "frontend" / "dist"
 
 app = FastAPI(
-    title="NutriPlan API",
+    title="AI-Based Food and Nutrition Planning Agent API",
     description="REST adapter for the ICMR-NIN nutrition planning engine.",
     version="1.0.0",
 )
@@ -95,7 +95,7 @@ def _default_profile(name: str) -> dict[str, Any]:
 
 @app.get("/api/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "service": "NutriPlan API"}
+    return {"status": "ok", "service": "AI-Based Food and Nutrition Planning Agent API"}
 
 
 @app.post("/api/auth/signup")
@@ -267,7 +267,7 @@ def export(
     return Response(
         content=content,
         media_type="application/pdf",
-        headers={"Content-Disposition": 'attachment; filename="nutriplan-7-day-plan.pdf"'},
+        headers={"Content-Disposition": 'attachment; filename="ai-nutrition-7-day-plan.pdf"'},
     )
 
 

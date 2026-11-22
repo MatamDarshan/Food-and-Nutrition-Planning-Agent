@@ -65,7 +65,7 @@ function Bootstrap() {
             <Apple className="h-7 w-7" />
           </span>
           <Loader2 className="mx-auto mt-5 h-5 w-5 animate-spin text-brand-600" />
-          <p className="mt-3 text-xs font-semibold text-muted-foreground">Loading NutriPlan…</p>
+          <p className="mt-3 text-xs font-semibold text-muted-foreground">Loading AI Nutrition Planner…</p>
         </div>
       </div>
     );
