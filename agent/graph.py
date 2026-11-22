@@ -53,6 +53,7 @@ from tools.food_tools import (
 )
 from tools.nutrition_tools import calculate_nutrition_targets
 from rag.retriever import retrieve_nutrition_knowledge
+from rag.hybrid_retriever import retrieve_hybrid_nutrition_knowledge
 
 
 # ── Registered Tools ──────────────────────────────────────────────────────────
@@ -64,6 +65,7 @@ ALL_TOOLS = [
     find_food_substitutes,
     validate_meal_plan,
     retrieve_nutrition_knowledge,
+    retrieve_hybrid_nutrition_knowledge,
 ]
 
 

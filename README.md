@@ -6,8 +6,8 @@ An autonomous Agentic AI system that computes personalized biometric energy requ
 [![Gemini](https://img.shields.io/badge/Google_Gemini-Flash-orange.svg)](https://deepmind.google/technologies/gemini/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2%2B-green.svg)](https://langchain-ai.github.io/langgraph/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.50%2B-red.svg)](https://streamlit.io/)
-[![Tests](https://img.shields.io/badge/Tests-144%20passed%20(100%25)-brightgreen.svg)](tests/)
-[![RAG](https://img.shields.io/badge/RAG-FAISS%20%2B%20HuggingFace-blueviolet.svg)](rag/)
+[![Tests](https://img.shields.io/badge/Tests-160%20passed%20(100%25)-brightgreen.svg)](tests/)
+[![RAG](https://img.shields.io/badge/RAG-FAISS%20%2B%20BM25%20hybrid-blueviolet.svg)](rag/)
 
 ---
 
@@ -24,7 +24,7 @@ Dietary planning in India often suffers from:
 
 - **Scientific Calculation Engine:** Implement the **Mifflin-St Jeor** formula to calculate Basal Metabolic Rate (BMR), adjust for Physical Activity Level (PAL) to compute Total Daily Energy Expenditure (TDEE), and derive goal-specific daily macronutrient targets.
 - **Curated Indian Dataset:** Compile an authenticated 57-item Indian food composition dataset based on **ICMR-National Institute of Nutrition (NIN)** data with vegetarian, non-vegetarian, macronutrient, allergen, and glycemic index tags.
-- **Agentic AI & Self-Healing Loop:** Leverage **Google Gemini Flash** bound with 5 specialized Python tools and a 7-node **LangGraph** StateGraph that automatically validates meal plans and triggers up to 2 corrective revisions if constraints are violated. A model fallback chain and deterministic offline answers keep every feature working when a model is retired or the API is unreachable.
+- **Agentic AI & Self-Healing Loop:** Leverage **Google Gemini Flash** bound with 7 specialized Python tools and a 7-node **LangGraph** StateGraph that automatically validates meal plans and triggers up to 2 corrective revisions if constraints are violated. A model fallback chain and deterministic offline answers keep every feature working when a model is retired or the API is unreachable.
 - **Interactive Web Interface:** Provide a responsive Streamlit dashboard with biometric metric cards, meal-wise breakdown tables, distribution charts, and a multi-turn chat assistant with session memory.
 
 ---
@@ -35,12 +35,12 @@ Dietary planning in India often suffers from:
 |---|---|---|
 | **AI Reasoning** | Google Gemini Flash (`gemini-flash-lite-latest`) | Autonomous reasoning, tool calling, and dietary advice |
 | **Agent Framework** | LangGraph & LangChain Core | StateGraph orchestration, conditional edges, memory checkpointer |
-| **Knowledge Retrieval (RAG)** | FAISS & HuggingFace (`all-MiniLM-L6-v2`) | Local dense retrieval over ICMR-NIN guidelines + a separate condition-reference index |
+| **Knowledge Retrieval (RAG)** | FAISS + pure-Python BM25, HuggingFace (`all-MiniLM-L6-v2`) | Hybrid dense/lexical retrieval with reciprocal rank fusion over core and condition indexes |
 | **Document Processing** | PyPDFLoader & RecursiveSplitter | PDF parsing, chunking (600 chars / 120 overlap) with source/page/condition metadata |
 | **Data & Descriptors** | Pandas & NumPy | Vectorized database filtering and cosine similarity ranking |
 | **Validation** | Pydantic v2 & Pydantic-Settings | Typed schemas, configuration management, strict input validation |
 | **User Interface** | Streamlit | Responsive dashboard, KPI cards, meal tables, and chat assistant |
-| **Testing** | Pytest & Pytest-Cov | 144-test automated suite with 100% pass rate |
+| **Testing** | Pytest & Pytest-Cov | 160-test automated suite with 100% pass rate |
 
 ---
 
@@ -73,7 +73,7 @@ flowchart TD
 
 ## 🧰 Python Tools
 
-The agent invokes five dedicated Python tools:
+The agent invokes seven dedicated Python tools:
 
 1. **`calculate_nutrition_targets`**: Derives BMI, BMR, TDEE, Calorie targets, and Protein, Carbohydrate, Fat, and Fiber gram goals.
 2. **`search_food_database`**: Vectorized search filtering by diet type (`veg`/`non-veg`), meal slot (`breakfast`, `lunch`, `snack`, `dinner`), calorie cap, and excluded allergen tags.
@@ -86,6 +86,11 @@ The agent invokes five dedicated Python tools:
    - Zero allergen items in restricted plans.
    - Zero user-excluded foods.
    - Planned calories strictly within **±15%** of target.
+6. **`retrieve_nutrition_knowledge`**: Distance-filtered ICMR-NIN RAG tool with
+   composed answers and source/page citations.
+7. **`retrieve_hybrid_nutrition_knowledge`**: Fuses dense FAISS + BM25 with
+   reciprocal rank fusion across the core and condition indexes, and appends a
+   deterministic citation-verification result to every answer.
 
 ---
 
@@ -109,7 +114,8 @@ AI-Food-Nutrition-Agent/
 │   ├── user_profile.py                # Pydantic v2 UserProfile with field validators
 │   ├── calculations.py                # Pure mathematical functions (Mifflin-St Jeor)
 │   ├── schemas.py                     # Shared Pydantic data schemas & targets
-│   └── validation.py                  # Deterministic meal plan verification engine
+│   ├── validation.py                  # Deterministic meal plan verification engine
+│   └── citations.py                   # Rule-based citation & numeric-claim verifier
 │
 ├── tools/
 │   ├── __init__.py
@@ -146,6 +152,8 @@ AI-Food-Nutrition-Agent/
 │   ├── retriever.py                   # Calibrated distance-filtered retriever & LangChain tool
 │   ├── ingest.py                      # CLI for rebuilding named collections with metadata
 │   ├── condition_retriever.py         # Additive filtered retrieval over the condition index
+│   ├── sparse_index.py                # Dependency-free Okapi BM25 lexical index
+│   ├── hybrid_retriever.py            # FAISS + BM25 reciprocal rank fusion & cited answers
 │   └── evaluate_rag.py                # 16-query RAG factual accuracy & rejection benchmark
 │
 ├── knowledge_base/
@@ -248,8 +256,8 @@ pytest tests/ -v
 ```
 
 ### Summary of Results
-- **Collected:** 144 test cases across 12 test modules
-- **Passed:** 144 (100% Pass Rate)
+- **Collected:** 160 test cases across 13 test modules
+- **Passed:** 160 (100% Pass Rate)
 - **Execution Time:** ~90 seconds (fully offline and deterministic)
 
 ### Module Breakdown
@@ -267,6 +275,7 @@ pytest tests/ -v
 | `test_audit_validation_and_accuracy.py` | Audit of validation, micronutrients and profile-aware chat safety (13 tests) | ✅ 13 PASS |
 | `test_ui_frontend.py` | Streamlit AppTest smoke tests for all five pages and chips (8 tests) | ✅ 8 PASS |
 | `test_ingestion.py` | Manifest, dry-run/rebuild ingestion and condition retrieval (12 tests) | ✅ 12 PASS |
+| `test_hybrid_and_citations.py` | BM25, RRF fusion, filtering and citation verification (16 tests) | ✅ 16 PASS |
 
 Run the dedicated 16-query RAG factual accuracy and rejection benchmark:
 ```bash
