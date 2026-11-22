@@ -59,6 +59,7 @@ from ui.food_database import render_food_database_page
 from ui.layout import render_sidebar
 from ui.meal_planner import render_today_page, render_week_page
 from ui.profile_form import blank_profile, render_profile_form
+from ui.profile_wizard import render_profile_wizard, reset_profile_wizard
 from ui.styles import THEME_CSS
 
 
@@ -111,6 +112,7 @@ def _init_session_state() -> None:
     st.session_state.setdefault("nav_page", PAGE_TODAY)
     st.session_state.setdefault("thread_id", _new_thread_id())
     st.session_state.setdefault("profile_form_token", 0)
+    st.session_state.setdefault("profile_input_mode", "Form")
     st.session_state.setdefault("_new_user_mode", False)
     st.session_state.setdefault("_demo_attempted", False)
     st.session_state.setdefault("init_plan_error", None)
@@ -212,6 +214,7 @@ def _start_new_profile() -> None:
     st.session_state._form_draft_user = None
     st.session_state.profile_form_token += 1
     st.session_state.form_draft = blank_profile()
+    reset_profile_wizard()
 
 
 # ── Session bootstrap ─────────────────────────────────────────────────────────
@@ -296,7 +299,17 @@ if st.session_state.get("init_plan_error"):
 
 
 if active_page == PAGE_PROFILE:
-    profile_data = render_profile_form(initial_profile=active_profile or DEFAULT_PROFILE)
+    profile_mode = st.radio(
+        "Profile input mode",
+        options=["Form", "Chat wizard"],
+        horizontal=True,
+        key="profile_input_mode",
+        help="Use the classic form or answer one friendly question at a time.",
+    )
+    if profile_mode == "Chat wizard":
+        profile_data = render_profile_wizard()
+    else:
+        profile_data = render_profile_form(initial_profile=active_profile or DEFAULT_PROFILE)
 
     if profile_data:
         target_name = profile_data.get("name", "User")
@@ -308,6 +321,7 @@ if active_page == PAGE_PROFILE:
             else:
                 existed = target_name in st.session_state.users
                 _apply_user_record(target_name, record)
+                reset_profile_wizard()
                 st.session_state.pending_page = PAGE_TODAY
                 st.toast(
                     f"✅ {'Updated' if existed else 'Created'} {target_name}'s profile"

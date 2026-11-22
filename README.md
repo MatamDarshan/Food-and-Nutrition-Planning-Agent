@@ -6,7 +6,7 @@ An autonomous Agentic AI system that computes personalized biometric energy requ
 [![Gemini](https://img.shields.io/badge/Google_Gemini-Flash-orange.svg)](https://deepmind.google/technologies/gemini/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2%2B-green.svg)](https://langchain-ai.github.io/langgraph/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.50%2B-red.svg)](https://streamlit.io/)
-[![Tests](https://img.shields.io/badge/Tests-160%20passed%20(100%25)-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-173%20passed%20(100%25)-brightgreen.svg)](tests/)
 [![RAG](https://img.shields.io/badge/RAG-FAISS%20%2B%20BM25%20hybrid-blueviolet.svg)](rag/)
 
 ---
@@ -25,7 +25,7 @@ Dietary planning in India often suffers from:
 - **Scientific Calculation Engine:** Implement the **Mifflin-St Jeor** formula to calculate Basal Metabolic Rate (BMR), adjust for Physical Activity Level (PAL) to compute Total Daily Energy Expenditure (TDEE), and derive goal-specific daily macronutrient targets.
 - **Curated Indian Dataset:** Compile an authenticated 57-item Indian food composition dataset based on **ICMR-National Institute of Nutrition (NIN)** data with vegetarian, non-vegetarian, macronutrient, allergen, and glycemic index tags.
 - **Agentic AI & Self-Healing Loop:** Leverage **Google Gemini Flash** bound with 7 specialized Python tools and a 7-node **LangGraph** StateGraph that automatically validates meal plans and triggers up to 2 corrective revisions if constraints are violated. A model fallback chain and deterministic offline answers keep every feature working when a model is retired or the API is unreachable.
-- **Interactive Web Interface:** Provide a responsive Streamlit dashboard with biometric metric cards, meal-wise breakdown tables, distribution charts, and a multi-turn chat assistant with session memory.
+- **Interactive Web Interface:** Provide a responsive Streamlit dashboard with biometric metric cards, meal-wise breakdown tables, distribution charts, a multi-turn chat assistant with session memory, and an optional one-question-at-a-time profile wizard alongside the classic form.
 
 ---
 
@@ -40,7 +40,7 @@ Dietary planning in India often suffers from:
 | **Data & Descriptors** | Pandas & NumPy | Vectorized database filtering and cosine similarity ranking |
 | **Validation** | Pydantic v2 & Pydantic-Settings | Typed schemas, configuration management, strict input validation |
 | **User Interface** | Streamlit | Responsive dashboard, KPI cards, meal tables, and chat assistant |
-| **Testing** | Pytest & Pytest-Cov | 160-test automated suite with 100% pass rate |
+| **Testing** | Pytest & Pytest-Cov | 173-test automated suite with 100% pass rate |
 
 ---
 
@@ -48,13 +48,13 @@ Dietary planning in India often suffers from:
 
 ```mermaid
 flowchart TD
-    A([User Input via Streamlit Form]) --> B[Profile Validation Node\nPydantic v2]
+    A([User Input via Form or Chat Wizard]) --> B[Profile Validation Node\nPydantic v2]
     B -->|Valid| C[Nutrition Calculation Node\nMifflin-St Jeor & TDEE]
     B -->|Invalid| Z[Final Response Node\nDisplay Error]
     
     C --> D{AI Agent Node\nGemini Flash}
     
-    D -->|Tool Call| E[Tool Execution Node\n5 Specialized Tools]
+    D -->|Tool Call| E[Tool Execution Node\n7 Specialized Tools]
     E --> D
     
     D -->|Plan Generated| F[Meal Plan Validation Node\nDeterministic Rule Engine]
@@ -115,7 +115,8 @@ AI-Food-Nutrition-Agent/
 │   ├── calculations.py                # Pure mathematical functions (Mifflin-St Jeor)
 │   ├── schemas.py                     # Shared Pydantic data schemas & targets
 │   ├── validation.py                  # Deterministic meal plan verification engine
-│   └── citations.py                   # Rule-based citation & numeric-claim verifier
+│   ├── citations.py                   # Rule-based citation & numeric-claim verifier
+│   └── profile_wizard.py              # Headless one-question-at-a-time profile state machine
 │
 ├── tools/
 │   ├── __init__.py
@@ -131,6 +132,7 @@ AI-Food-Nutrition-Agent/
 ├── ui/
 │   ├── __init__.py
 │   ├── profile_form.py                # Page 1: 4-section biometric & goal profile form
+│   ├── profile_wizard.py              # Optional chat-style profile wizard (form stays default)
 │   ├── dashboard.py                   # Page 2: KPI metrics, macro distributions, charts
 │   ├── meal_planner.py                # Page 3: 7-day meal cards, micronutrients, weekly analytics
 │   ├── food_database.py               # Page 4: 57-item food composition & micronutrient inspector
@@ -178,7 +180,9 @@ AI-Food-Nutrition-Agent/
 │   ├── test_regressions.py            # Audit regression tests: parsing, safety & allergens (11 tests)
 │   ├── test_audit_validation_and_accuracy.py  # Validation and micronutrient audit (13 tests)
 │   ├── test_ui_frontend.py            # Streamlit AppTest smoke tests for all five pages (8 tests)
-│   └── test_ingestion.py              # Multi-collection ingestion & condition retrieval (12 tests)
+│   ├── test_ingestion.py              # Multi-collection ingestion & condition retrieval (12 tests)
+│   ├── test_hybrid_and_citations.py   # BM25, hybrid RRF fusion & citation checks (16 tests)
+│   └── test_profile_wizard.py         # Wizard state machine & AppTest chat flow (13 tests)
 │
 └── evidence/
     ├── evaluation_report.md           # Formal testing & evaluation benchmark report
@@ -246,6 +250,20 @@ streamlit run app.py
 ```
 Open your browser at `http://localhost:8501`.
 
+### Profile input modes
+The **👤 My profile** page offers two opt-in modes:
+
+- **Form** (default) — the original four-section form with quick-start presets.
+- **Chat wizard** — asks for one field at a time in a chat bubble, understands
+  everyday answers (`milk` → `dairy`, `5'7` → `170 cm`, `lose` → `weight_loss`),
+  retries invalid answers, and lets you skip optional fields. It finishes with a
+  review summary and a **Create plan with this profile** button.
+
+Both paths call the same `UserProfile` Pydantic validator, so the generated plan
+is identical. The wizard lives in `core/profile_wizard.py` (headless state
+machine) and `ui/profile_wizard.py` (Streamlit chat UI); nothing is saved until
+you submit.
+
 ---
 
 ## 🧪 Testing & Evaluation Results
@@ -256,8 +274,8 @@ pytest tests/ -v
 ```
 
 ### Summary of Results
-- **Collected:** 160 test cases across 13 test modules
-- **Passed:** 160 (100% Pass Rate)
+- **Collected:** 173 test cases across 14 test modules
+- **Passed:** 173 (100% Pass Rate)
 - **Execution Time:** ~90 seconds (fully offline and deterministic)
 
 ### Module Breakdown
@@ -276,6 +294,7 @@ pytest tests/ -v
 | `test_ui_frontend.py` | Streamlit AppTest smoke tests for all five pages and chips (8 tests) | ✅ 8 PASS |
 | `test_ingestion.py` | Manifest, dry-run/rebuild ingestion and condition retrieval (12 tests) | ✅ 12 PASS |
 | `test_hybrid_and_citations.py` | BM25, RRF fusion, filtering and citation verification (16 tests) | ✅ 16 PASS |
+| `test_profile_wizard.py` | Headless wizard state machine, parsing, skips, retry and AppTest chat flow (13 tests) | ✅ 13 PASS |
 
 Run the dedicated 16-query RAG factual accuracy and rejection benchmark:
 ```bash
