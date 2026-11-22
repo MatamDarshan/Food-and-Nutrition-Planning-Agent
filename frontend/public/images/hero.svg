@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-label="Healthy Indian thali">
+  <defs>
+    <radialGradient id="bg" cx="70%" cy="35%" r="80%"><stop stop-color="#d9f2e3"/><stop offset="1" stop-color="#0f4130"/></radialGradient>
+    <linearGradient id="plate" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#e8f3ec"/></linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#06251a" flood-opacity=".28"/></filter>
+  </defs>
+  <rect width="1200" height="800" fill="url(#bg)"/>
+  <circle cx="880" cy="120" r="280" fill="#ffffff" opacity=".07"/>
+  <circle cx="180" cy="720" r="240" fill="#f48563" opacity=".12"/>
+  <g filter="url(#shadow)" transform="translate(770 420)">
+    <circle r="290" fill="url(#plate)"/>
+    <circle r="258" fill="none" stroke="#d6f5e3" stroke-width="3"/>
+    <text x="-150" y="-60" font-size="120">🍚</text>
+    <text x="40" y="-50" font-size="105">🍲</text>
+    <text x="-140" y="110" font-size="105">🥗</text>
+    <text x="55" y="115" font-size="105">🫓</text>
+    <circle cx="-5" cy="-5" r="55" fill="#fff" opacity=".85"/>
+    <text x="-38" y="18" font-size="65">🥣</text>
+  </g>
+  <g opacity=".9"><text x="115" y="215" font-size="86">🌿</text><text x="330" y="680" font-size="70">🍋</text></g>
+</svg>

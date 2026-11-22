@@ -21,6 +21,11 @@ env/
 ENV/
 .venv/
 
+# Local REST API state & frontend build output
+.api_data/
+frontend/dist/
+frontend/node_modules/
+
 # Pytest & Coverage
 .pytest_cache/
 .coverage

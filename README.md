@@ -1,12 +1,14 @@
-# 🌿 AI-Based Food and Nutrition Planning Agent
+# 🌿 NutriPlan — AI Food and Nutrition Planning Agent
 
-An autonomous Agentic AI system that computes personalized biometric energy requirements, searches curated Indian foods (ICMR-NIN), generates balanced 7-day meal plans (Monday to Sunday), calculates detailed macronutrients and micronutrients (Vitamins & Minerals), and self-validates dietary compliance using Google Gemini Flash, LangGraph, and RAG.
+A production-style nutrition product with a React + TypeScript frontend, a FastAPI REST layer, and the original LangGraph/Gemini/FAISS engine as the source of truth. It computes personalized energy requirements from curated Indian food data (ICMR-NIN/IFCT), builds balanced 7-day meal plans, tracks macros plus 17 micronutrients, and explains every recommendation through a cited AI Nutritionist.
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![React](https://img.shields.io/badge/React-19%20%2B%20TypeScript-61dafb.svg)](https://react.dev/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688.svg)](https://fastapi.tiangolo.com/)
 [![Gemini](https://img.shields.io/badge/Google_Gemini-Flash-orange.svg)](https://deepmind.google/technologies/gemini/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2%2B-green.svg)](https://langchain-ai.github.io/langgraph/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.50%2B-red.svg)](https://streamlit.io/)
-[![Tests](https://img.shields.io/badge/Tests-173%20passed%20(100%25)-brightgreen.svg)](tests/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-legacy-lightgrey.svg)](https://streamlit.io/)
+[![Tests](https://img.shields.io/badge/Tests-184%20passed%20(100%25)-brightgreen.svg)](tests/)
 [![RAG](https://img.shields.io/badge/RAG-FAISS%20%2B%20BM25%20hybrid-blueviolet.svg)](rag/)
 
 ---
@@ -33,14 +35,15 @@ Dietary planning in India often suffers from:
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| **AI Reasoning** | Google Gemini Flash (`gemini-flash-lite-latest`) | Autonomous reasoning, tool calling, and dietary advice |
-| **Agent Framework** | LangGraph & LangChain Core | StateGraph orchestration, conditional edges, memory checkpointer |
-| **Knowledge Retrieval (RAG)** | FAISS + pure-Python BM25, HuggingFace (`all-MiniLM-L6-v2`) | Hybrid dense/lexical retrieval with reciprocal rank fusion over core and condition indexes |
-| **Document Processing** | PyPDFLoader & RecursiveSplitter | PDF parsing, chunking (600 chars / 120 overlap) with source/page/condition metadata |
-| **Data & Descriptors** | Pandas & NumPy | Vectorized database filtering and cosine similarity ranking |
-| **Validation** | Pydantic v2 & Pydantic-Settings | Typed schemas, configuration management, strict input validation |
-| **User Interface** | Streamlit | Responsive dashboard, KPI cards, meal tables, and chat assistant |
-| **Testing** | Pytest & Pytest-Cov | 173-test automated suite with 100% pass rate |
+| **Frontend (primary)** | React 19, TypeScript, Vite, Tailwind CSS, Radix UI, Framer Motion, Recharts | Landing, onboarding wizard, dashboard, planner, recipe, chat, insights, grocery, library, profile |
+| **Backend API** | FastAPI, Uvicorn, Pydantic | REST adapter for auth, profiles, plans, foods, chat, grocery, favorites, history, insights, export |
+| **State & API client** | Zustand, Axios | Client state, hydration, typed REST calls (`VITE_API_URL` override) |
+| **AI reasoning** | Google Gemini Flash (`gemini-flash-lite-latest`) | Optional LangGraph planning (`mode="ai"`) and opt-in chat (`API_USE_GEMINI_CHAT`) |
+| **Agent framework** | LangGraph & LangChain Core | StateGraph orchestration, conditional edges, memory checkpointer (unchanged engine) |
+| **Knowledge retrieval (RAG)** | FAISS + pure-Python BM25, HuggingFace (`all-MiniLM-L6-v2`) | Hybrid dense/lexical retrieval and cited chat context |
+| **Data & validation** | Pandas, NumPy, Pydantic v2 | ICMR-NIN/IFCT dataset operations, validated request/response contracts |
+| **Testing** | Pytest | 184-test suite covering core, agent, RAG, UI, and REST API |
+| **Legacy UI** | Streamlit (`app.py`) | Kept for reference; React/FastAPI is the primary product UI |
 
 ---
 
@@ -48,26 +51,21 @@ Dietary planning in India often suffers from:
 
 ```mermaid
 flowchart TD
-    A([User Input via Form or Chat Wizard]) --> B[Profile Validation Node\nPydantic v2]
-    B -->|Valid| C[Nutrition Calculation Node\nMifflin-St Jeor & TDEE]
-    B -->|Invalid| Z[Final Response Node\nDisplay Error]
-    
-    C --> D{AI Agent Node\nGemini Flash}
-    
-    D -->|Tool Call| E[Tool Execution Node\n7 Specialized Tools]
-    E --> D
-    
-    D -->|Plan Generated| F[Meal Plan Validation Node\nDeterministic Rule Engine]
-    
-    F -->|Pass: Within ±15% & Compliant| G[Final Response Node\nValidated Plan]
-    F -->|Fail & Retries < 2| H[Plan Revision Node\nFeedback Prompt with Issues]
-    H --> D
-    F -->|Fail & Retries >= 2| I[Final Response Node\nPlan with Advisory Notice]
-    
-    G --> J([Streamlit Dashboard & Chat])
-    I --> J
-    Z --> J
+    U([User]) --> FE[React + TypeScript + Tailwind SPA]
+    FE -->|REST /api/*| API[FastAPI Adapter]
+    API --> STORE[(.api_data/store.json\nprofiles, plans, chat, grocery)]
+    API --> SVC[api/services.py\nprofile mapping, plan shaping, insights, chat]
+    SVC --> CORE[core/\nMifflin-St Jeor, targets, validation, schemas]
+    SVC --> TOOLS[tools/\nfood search, substitutes, nutrition]
+    SVC --> RAG[rag/\nFAISS + BM25, citations]
+    SVC --> AG[agent/graph.py\nLangGraph planner]
+    AG --> LLM[Gemini Flash\noptional / mode=ai]
+    AG --> TOOLS
+    AG --> CORE
+    API -->|serves frontend/dist| FE
 ```
+
+> **Engine-first rule:** `core/`, `tools/`, `rag/`, `agent/`, and `data/` remain the source of truth. The FastAPI layer is additive and adapts their outputs to the React client. Legacy Streamlit (`app.py` + `ui/`) remains in-repo.
 
 ---
 
@@ -94,99 +92,37 @@ The agent invokes seven dedicated Python tools:
 
 ---
 
-## 📂 Project Directory Structure
+## 📂 Project Structure
 
-```
-AI-Food-Nutrition-Agent/
-│
-├── app.py                             # Streamlit main application entry point
-├── requirements.txt                   # Production & testing dependencies
-├── .env.example                       # Template for API credentials & config
-├── .gitignore                         # Git exclusion rules
-├── README.md                          # Comprehensive project documentation
-│
-├── config/
-│   ├── __init__.py
-│   └── settings.py                    # Pydantic BaseSettings & env loader
-│
-├── core/
-│   ├── __init__.py
-│   ├── user_profile.py                # Pydantic v2 UserProfile with field validators
-│   ├── calculations.py                # Pure mathematical functions (Mifflin-St Jeor)
-│   ├── schemas.py                     # Shared Pydantic data schemas & targets
-│   ├── validation.py                  # Deterministic meal plan verification engine
-│   ├── citations.py                   # Rule-based citation & numeric-claim verifier
-│   └── profile_wizard.py              # Headless one-question-at-a-time profile state machine
-│
-├── tools/
-│   ├── __init__.py
-│   ├── nutrition_tools.py             # Tool 1: calculate_nutrition_targets
-│   └── food_tools.py                  # Tools 2–5: search, calc, substitute, validate
-│
-├── agent/
-│   ├── __init__.py
-│   ├── graph.py                       # LangGraph StateGraph, nodes & conditional edges
-│   ├── state.py                       # AgentState TypedDict definition
-│   └── prompts.py                     # Expert nutritionist prompts & revision template
-│
-├── ui/
-│   ├── __init__.py
-│   ├── profile_form.py                # Page 1: 4-section biometric & goal profile form
-│   ├── profile_wizard.py              # Optional chat-style profile wizard (form stays default)
-│   ├── dashboard.py                   # Page 2: KPI metrics, macro distributions, charts
-│   ├── meal_planner.py                # Page 3: 7-day meal cards, micronutrients, weekly analytics
-│   ├── food_database.py               # Page 4: 57-item food composition & micronutrient inspector
-│   ├── chat_interface.py             # Page 5: Multi-turn AI Nutritionist chat with RAG
-│   └── styles.py                      # Modern theme CSS, dark green/mint palette & cards
-│
-├── data/
-│   ├── food_data.csv                  # 57 Indian food items (ICMR-NIN curated)
-│   ├── micronutrient_data.py          # IFCT 2017 vitamins & minerals + RDA 2020 targets
-│   └── validate_data.py               # Standalone dataset integrity validator
-│
-├── rag/
-│   ├── __init__.py
-│   ├── document_loader.py             # PyPDFLoader wrappers for both document collections
-│   ├── document_sources.py            # Manifest: provenance + health-condition tags per PDF
-│   ├── text_splitter.py               # RecursiveCharacterTextSplitter chunking
-│   ├── embeddings.py                  # HuggingFace sentence-transformers local embeddings
-│   ├── vector_store.py                # FAISS indexing and persistent storage
-│   ├── retriever.py                   # Calibrated distance-filtered retriever & LangChain tool
-│   ├── ingest.py                      # CLI for rebuilding named collections with metadata
-│   ├── condition_retriever.py         # Additive filtered retrieval over the condition index
-│   ├── sparse_index.py                # Dependency-free Okapi BM25 lexical index
-│   ├── hybrid_retriever.py            # FAISS + BM25 reciprocal rank fusion & cited answers
-│   └── evaluate_rag.py                # 16-query RAG factual accuracy & rejection benchmark
-│
-├── knowledge_base/
-│   ├── nutrition_documents/           # Core ICMR-NIN reference PDF (see note below)
-│   ├── condition_documents/           # 6 condition PDFs (PCOS, thyroid, BP, lactose, obesity, sleep)
-│   ├── SOURCES.md                     # Provenance, condition tags and rebuild instructions
-│   ├── build_sample_documents.py      # Regenerates the bundled reference PDF
-│   ├── faiss_index/                   # Core FAISS index (index.faiss, index.pkl)
-│   └── condition_faiss_index/         # Condition-specific FAISS index
-│
-├── tests/
-│   ├── __init__.py
-│   ├── conftest.py                    # Pytest shared fixtures
-│   ├── test_calculations.py           # Unit tests for math formulas & profile checks (20 tests)
-│   ├── test_tools.py                  # Unit tests for all 5 Python tools (10 tests)
-│   ├── test_agent.py                  # Integration tests for LangGraph nodes & routing (9 tests)
-│   ├── test_functional_evaluation.py  # 7-scenario functional verification matrix (10 tests)
-│   ├── test_offline_and_live.py       # Offline fallback & live API routing tests (4 tests)
-│   ├── test_rag.py                    # Unit & integration tests for RAG pipeline (18 tests)
-│   ├── test_7day_upgrade.py           # 15-scenario verification for 7-day meal planning & UI (15 tests)
-│   ├── test_complete_system_verification.py  # End-to-end system verification (10 tests)
-│   ├── test_regressions.py            # Audit regression tests: parsing, safety & allergens (11 tests)
-│   ├── test_audit_validation_and_accuracy.py  # Validation and micronutrient audit (13 tests)
-│   ├── test_ui_frontend.py            # Streamlit AppTest smoke tests for all five pages (8 tests)
-│   ├── test_ingestion.py              # Multi-collection ingestion & condition retrieval (12 tests)
-│   ├── test_hybrid_and_citations.py   # BM25, hybrid RRF fusion & citation checks (16 tests)
-│   └── test_profile_wizard.py         # Wizard state machine & AppTest chat flow (13 tests)
-│
+```text
+Food-and-Nutrition-Planning-Agent/
+├── app.py                      # Legacy Streamlit entry point (kept for reference)
+├── requirements.txt            # Python dependencies (engine, RAG, FastAPI)
+├── api/                        # FastAPI REST adapter (additive layer)
+│   ├── main.py                 # App, routes, auth, SPA fallback, error handling
+│   ├── services.py             # Adapts core/agent/tools/rag to REST responses
+│   ├── store.py                # JSON-backed local persistence under .api_data/
+│   ├── schemas.py              # Request/response models
+│   └── recipes.py              # Additive recipe metadata, images, “why this meal”
+├── frontend/                   # React + TypeScript + Vite + Tailwind (primary UI)
+│   ├── src/
+│   │   ├── pages/              # Landing, Auth, Onboarding, Dashboard, Planner, Recipe, …
+│   │   ├── components/         # Layout, MealCard, FoodImage, UI primitives
+│   │   ├── lib/                # api.ts, store.ts (Zustand), types.ts, utils.ts
+│   │   └── index.css           # Tailwind theme tokens and design utilities
+│   ├── public/images/          # Local SVG fallbacks (hero, breakfast, lunch, snack, dinner)
+│   └── package.json            # npm scripts: dev, build, preview, lint
+├── core/                       # Unchanged: profile, calculations, schemas, validation, …
+├── agent/                      # LangGraph state graph, nodes, prompts (unchanged)
+├── tools/                      # Nutrition/food tools (unchanged)
+├── rag/                        # FAISS + BM25 hybrid retrieval, ingestion, evaluation
+├── data/                       # food_data.csv, micronutrient_data.py, …
+├── knowledge_base/             # PDFs and FAISS indexes (core + conditions)
+├── ui/                         # Legacy Streamlit UI modules
+├── tests/                      # Pytest suite (184 tests, including tests/test_api.py)
+│   └── test_api.py             # FastAPI adapter tests
+├── .api_data/                  # Local JSON state (auto-created, git-ignored)
 └── evidence/
-    ├── evaluation_report.md           # Formal testing & evaluation benchmark report
-    └── screenshots/                   # Execution evidence & UI captures
 ```
 
 > **Reference-document note:** `knowledge_base/nutrition_documents/` contains a
@@ -199,70 +135,94 @@ AI-Food-Nutrition-Agent/
 
 ---
 
-## 🚀 Installation & Execution
+## 🚀 Installation & Running
 
-### 1. Clone the Repository
+### 1. Clone and set up Python
 ```bash
-git clone https://github.com/your-username/AI-Food-Nutrition-Agent.git
-cd AI-Food-Nutrition-Agent
-```
-
-### 2. Set Up Virtual Environment
-```bash
+git clone https://github.com/MatamDarshan/Food-and-Nutrition-Planning-Agent.git
+cd Food-and-Nutrition-Planning-Agent
 python -m venv venv
-# On Windows:
-venv\Scripts\activate
-# On Linux/macOS:
-source venv/bin/activate
-```
-
-### 3. Install Dependencies
-```bash
+# Windows: venv\Scripts\activate
+# Linux/macOS: source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Configure API Key
-Create a `.env` file in the root directory:
+### 2. Configure environment (optional for AI mode)
 ```bash
 cp .env.example .env
+# Edit .env:
+# GOOGLE_API_KEY=your_gemini_api_key_here
+# MODEL_NAME=gemini-flash-lite-latest
 ```
-Open `.env` and add your Google Gemini API key:
-```ini
-GOOGLE_API_KEY=your_gemini_api_key_here
-MODEL_NAME=gemini-flash-lite-latest
+- The deterministic planner works without an API key.
+- `mode="ai"` plan generation requires `GOOGLE_API_KEY`.
+- Chat uses grounded RAG answers by default; set `API_USE_GEMINI_CHAT=1` to opt into Gemini rewriting (requires key).
+
+### 3. Build the React frontend
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
 ```
-*(Security Note: API keys are loaded strictly from the environment/.env on the backend. No API keys are ever requested or entered through the Streamlit web interface. If no API key is provided, the application automatically activates its deterministic offline ICMR-NIN demo planner).*
 
-The embedding model downloads once from HuggingFace on first use. For an
-air-gapped demo, pre-download the model and set `NUTRITION_OFFLINE=1`.
+### 4. Run the FastAPI app (serves built frontend + API)
+```bash
+python -m uvicorn api.main:app --reload --port 8000
+```
+Open `http://localhost:8000`. If `frontend/dist` exists, FastAPI serves the SPA with client-side routing fallback.
 
-### 5. Build Knowledge Base & Run Application
-Both FAISS indexes are shipped with the repository, so this step is optional.
-To rebuild them from the bundled PDFs (local embeddings, no API key needed):
+### 5. Frontend dev mode (hot reload)
+```bash
+# Terminal 1
+python -m uvicorn api.main:app --reload --port 8000
+
+# Terminal 2
+cd frontend
+npm run dev
+```
+Vite runs on `http://localhost:5173` by default. Set `VITE_API_URL=http://localhost:8000` in `frontend/.env` if needed (defaults to `http://localhost:8000`).
+
+### Demo account
+- **Endpoint:** `POST /api/auth/demo`
+- **Email:** `demo@nutrition.local`
+- **Password:** `demo1234`
+- The UI also has a “Try the demo” / demo-signin flow.
+
+### Local state
+- API state is stored in `.api_data/store.json` (users, tokens, profiles, plans, chat, favorites, history, checklist).
+- `.api_data/`, `frontend/dist/`, and `frontend/node_modules/` are git-ignored.
+
+### Legacy Streamlit app (reference)
+```bash
+streamlit run app.py
+```
+The Streamlit UI is preserved for reference; the React app is the primary frontend.
+
+### Knowledge base (optional rebuild)
+Both FAISS indexes are shipped. To rebuild:
 ```bash
 python -m rag.ingest --collection core --rebuild
 python -m rag.ingest --collection conditions --rebuild
 ```
-Use `--dry-run` first to inspect the document manifest without embedding.
-Start the Streamlit application:
-```bash
-streamlit run app.py
-```
-Open your browser at `http://localhost:8501`.
 
-### Profile input modes
-The **👤 My profile** page offers two opt-in modes:
+---
 
-- **Form** (default) — the original four-section form with quick-start presets.
-- **Chat wizard** — asks for one field at a time in a chat bubble, understands
-  everyday answers (`milk` → `dairy`, `5'7` → `170 cm`, `lose` → `weight_loss`),
-  retries invalid answers, and lets you skip optional fields. It finishes with a
-  review summary and a **Create plan with this profile** button.
+## 🔌 REST API (FastAPI)
 
-Both paths call the same `UserProfile` Pydantic validator, so the generated plan
-is identical. The wizard lives in `core/profile_wizard.py` (headless state
-machine) and `ui/profile_wizard.py` (Streamlit chat UI); nothing is saved until
-you submit.
+Base URL: `http://localhost:8000` (dev). All `/api/*` routes except health/auth/signup/signin/demo require `Authorization: Bearer <token>`.
+
+| Area | Endpoints |
+|---|---|
+| **Health/Auth** | `GET /api/health`, `POST /api/auth/signup`, `POST /api/auth/signin`, `POST /api/auth/demo`, `GET /api/auth/me`, `POST /api/auth/signout` |
+| **Profile/Targets** | `GET/PUT /api/profile`, `POST /api/targets` |
+| **Plans** | `POST /api/plans/generate`, `GET /api/plans/current`, `GET /api/plans`, `GET /api/plans/{id}`, `POST /api/plans/{id}/regenerate`, `POST /api/plans/{id}/swap`, `GET /api/plans/{id}/recipe`, `GET /api/plans/{id}/export`, `DELETE /api/plans/{id}` |
+| **Foods** | `GET /api/foods/search`, `GET /api/foods/substitutes` |
+| **Chat** | `POST /api/chat`, `GET /api/chat/history`, `DELETE /api/chat/history` |
+| **Grocery/Insights** | `GET /api/grocery`, `POST /api/grocery/check`, `GET /api/insights` |
+| **Favorites/History** | `GET/POST /api/favorites`, `GET/POST /api/history` |
+
+**Notes:** plan generation defaults to deterministic `mode="fast"`; `mode="ai"` uses LangGraph/Gemini when configured. Recipe prep steps are suggested (additive metadata), not sourced from IFCT. The React SPA is served by FastAPI when `frontend/dist` exists.
 
 ---
 
@@ -274,9 +234,16 @@ pytest tests/ -v
 ```
 
 ### Summary of Results
-- **Collected:** 173 test cases across 14 test modules
-- **Passed:** 173 (100% Pass Rate)
-- **Execution Time:** ~90 seconds (fully offline and deterministic)
+- **Collected:** 184 test cases across 15 test modules (includes `tests/test_api.py`)
+- **Passed:** 184 (100% Pass Rate, plus 1 non-blocking warning)
+- **Execution Time:** ~2 minutes (fully offline and deterministic for most tests)
+
+### API quick smoke (optional)
+```bash
+python -m uvicorn api.main:app --port 8000
+# In another shell, try:
+curl http://localhost:8000/api/health
+```
 
 ### Module Breakdown
 | Test Module | Coverage Area | Status |
@@ -295,6 +262,7 @@ pytest tests/ -v
 | `test_ingestion.py` | Manifest, dry-run/rebuild ingestion and condition retrieval (12 tests) | ✅ 12 PASS |
 | `test_hybrid_and_citations.py` | BM25, RRF fusion, filtering and citation verification (16 tests) | ✅ 16 PASS |
 | `test_profile_wizard.py` | Headless wizard state machine, parsing, skips, retry and AppTest chat flow (13 tests) | ✅ 13 PASS |
+| `test_api.py` | FastAPI REST adapter: auth, profile/targets, plan generate/swap/regenerate, grocery/insights/export, foods, chat citations, favorites/history (11 tests) | ✅ 11 PASS |
 
 Run the dedicated 16-query RAG factual accuracy and rejection benchmark:
 ```bash

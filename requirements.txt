@@ -27,7 +27,11 @@ langchain-huggingface>=0.1.0
 langchain-text-splitters>=0.3.0
 reportlab>=4.0.0
 
-# User Interface
+# REST API (React frontend adapter)
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+
+# User Interface (legacy Streamlit app kept for reference)
 streamlit>=1.50.0
 
 # Testing & Code Quality
