@@ -6,7 +6,7 @@ An autonomous Agentic AI system that computes personalized biometric energy requ
 [![Gemini](https://img.shields.io/badge/Google_Gemini-Flash-orange.svg)](https://deepmind.google/technologies/gemini/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2%2B-green.svg)](https://langchain-ai.github.io/langgraph/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.50%2B-red.svg)](https://streamlit.io/)
-[![Tests](https://img.shields.io/badge/Tests-132%20passed%20(100%25)-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-144%20passed%20(100%25)-brightgreen.svg)](tests/)
 [![RAG](https://img.shields.io/badge/RAG-FAISS%20%2B%20HuggingFace-blueviolet.svg)](rag/)
 
 ---
@@ -35,12 +35,12 @@ Dietary planning in India often suffers from:
 |---|---|---|
 | **AI Reasoning** | Google Gemini Flash (`gemini-flash-lite-latest`) | Autonomous reasoning, tool calling, and dietary advice |
 | **Agent Framework** | LangGraph & LangChain Core | StateGraph orchestration, conditional edges, memory checkpointer |
-| **Knowledge Retrieval (RAG)** | FAISS & HuggingFace (`all-MiniLM-L6-v2`) | Local dense vector retrieval over ICMR-NIN nutrition guidelines |
-| **Document Processing** | PyPDFLoader & RecursiveSplitter | PDF parsing, chunking (600 chars / 120 overlap) with metadata |
+| **Knowledge Retrieval (RAG)** | FAISS & HuggingFace (`all-MiniLM-L6-v2`) | Local dense retrieval over ICMR-NIN guidelines + a separate condition-reference index |
+| **Document Processing** | PyPDFLoader & RecursiveSplitter | PDF parsing, chunking (600 chars / 120 overlap) with source/page/condition metadata |
 | **Data & Descriptors** | Pandas & NumPy | Vectorized database filtering and cosine similarity ranking |
 | **Validation** | Pydantic v2 & Pydantic-Settings | Typed schemas, configuration management, strict input validation |
 | **User Interface** | Streamlit | Responsive dashboard, KPI cards, meal tables, and chat assistant |
-| **Testing** | Pytest & Pytest-Cov | 132-test automated suite with 100% pass rate |
+| **Testing** | Pytest & Pytest-Cov | 144-test automated suite with 100% pass rate |
 
 ---
 
@@ -138,17 +138,23 @@ AI-Food-Nutrition-Agent/
 │
 ├── rag/
 │   ├── __init__.py
-│   ├── document_loader.py             # PyPDFLoader wrapper for nutrition docs
+│   ├── document_loader.py             # PyPDFLoader wrappers for both document collections
+│   ├── document_sources.py            # Manifest: provenance + health-condition tags per PDF
 │   ├── text_splitter.py               # RecursiveCharacterTextSplitter chunking
 │   ├── embeddings.py                  # HuggingFace sentence-transformers local embeddings
 │   ├── vector_store.py                # FAISS indexing and persistent storage
 │   ├── retriever.py                   # Calibrated distance-filtered retriever & LangChain tool
+│   ├── ingest.py                      # CLI for rebuilding named collections with metadata
+│   ├── condition_retriever.py         # Additive filtered retrieval over the condition index
 │   └── evaluate_rag.py                # 16-query RAG factual accuracy & rejection benchmark
 │
 ├── knowledge_base/
-│   ├── nutrition_documents/           # Reference PDF used by the demo index (see note below)
+│   ├── nutrition_documents/           # Core ICMR-NIN reference PDF (see note below)
+│   ├── condition_documents/           # 6 condition PDFs (PCOS, thyroid, BP, lactose, obesity, sleep)
+│   ├── SOURCES.md                     # Provenance, condition tags and rebuild instructions
 │   ├── build_sample_documents.py      # Regenerates the bundled reference PDF
-│   └── faiss_index/                   # Persisted FAISS index files (index.faiss, index.pkl)
+│   ├── faiss_index/                   # Core FAISS index (index.faiss, index.pkl)
+│   └── condition_faiss_index/         # Condition-specific FAISS index
 │
 ├── tests/
 │   ├── __init__.py
@@ -161,7 +167,10 @@ AI-Food-Nutrition-Agent/
 │   ├── test_rag.py                    # Unit & integration tests for RAG pipeline (18 tests)
 │   ├── test_7day_upgrade.py           # 15-scenario verification for 7-day meal planning & UI (15 tests)
 │   ├── test_complete_system_verification.py  # End-to-end system verification (10 tests)
-│   └── test_regressions.py            # Audit regression tests: parsing, safety & allergens (11 tests)
+│   ├── test_regressions.py            # Audit regression tests: parsing, safety & allergens (11 tests)
+│   ├── test_audit_validation_and_accuracy.py  # Validation and micronutrient audit (13 tests)
+│   ├── test_ui_frontend.py            # Streamlit AppTest smoke tests for all five pages (8 tests)
+│   └── test_ingestion.py              # Multi-collection ingestion & condition retrieval (12 tests)
 │
 └── evidence/
     ├── evaluation_report.md           # Formal testing & evaluation benchmark report
@@ -172,7 +181,9 @@ AI-Food-Nutrition-Agent/
 > generated reference PDF used by the bundled demo index. Its text is a curated
 > summary written for demonstration, not the official ICMR-NIN publication. For
 > production use, replace it with the official ICMR-NIN Dietary Guidelines PDF
-> and rebuild the index with `python rag/vector_store.py --rebuild`.
+> and rebuild the index with `python -m rag.ingest --collection core --rebuild`
+> (see [knowledge_base/SOURCES.md](knowledge_base/SOURCES.md) for full provenance
+> of both document collections).
 
 ---
 
@@ -214,10 +225,13 @@ The embedding model downloads once from HuggingFace on first use. For an
 air-gapped demo, pre-download the model and set `NUTRITION_OFFLINE=1`.
 
 ### 5. Build Knowledge Base & Run Application
-Initialize local FAISS vector storage from ICMR-NIN documents:
+Both FAISS indexes are shipped with the repository, so this step is optional.
+To rebuild them from the bundled PDFs (local embeddings, no API key needed):
 ```bash
-python rag/vector_store.py
+python -m rag.ingest --collection core --rebuild
+python -m rag.ingest --collection conditions --rebuild
 ```
+Use `--dry-run` first to inspect the document manifest without embedding.
 Start the Streamlit application:
 ```bash
 streamlit run app.py
@@ -234,9 +248,9 @@ pytest tests/ -v
 ```
 
 ### Summary of Results
-- **Collected:** 132 test cases across 11 test modules
-- **Passed:** 132 (100% Pass Rate)
-- **Execution Time:** ~65 seconds (fully offline and deterministic)
+- **Collected:** 144 test cases across 12 test modules
+- **Passed:** 144 (100% Pass Rate)
+- **Execution Time:** ~90 seconds (fully offline and deterministic)
 
 ### Module Breakdown
 | Test Module | Coverage Area | Status |
@@ -252,6 +266,7 @@ pytest tests/ -v
 | `test_regressions.py` | Nested JSON parsing, malformed-plan safety, allergen consistency, stale state (11 tests) | ✅ 11 PASS |
 | `test_audit_validation_and_accuracy.py` | Audit of validation, micronutrients and profile-aware chat safety (13 tests) | ✅ 13 PASS |
 | `test_ui_frontend.py` | Streamlit AppTest smoke tests for all five pages and chips (8 tests) | ✅ 8 PASS |
+| `test_ingestion.py` | Manifest, dry-run/rebuild ingestion and condition retrieval (12 tests) | ✅ 12 PASS |
 
 Run the dedicated 16-query RAG factual accuracy and rejection benchmark:
 ```bash

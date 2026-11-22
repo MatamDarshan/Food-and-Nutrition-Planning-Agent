@@ -14,7 +14,11 @@ try:
 except Exception:
     pass
 
-from rag.document_loader import load_nutrition_documents
+from rag.document_loader import (
+    load_nutrition_documents,
+    load_condition_documents,
+    load_all_knowledge_documents,
+)
 from rag.text_splitter import split_nutrition_documents
 from rag.embeddings import get_embedding_model
 from rag.vector_store import get_or_create_vector_store, build_vector_store, load_vector_store
@@ -22,6 +26,8 @@ from rag.retriever import get_retriever, retrieve_nutrition_knowledge
 
 __all__ = [
     "load_nutrition_documents",
+    "load_condition_documents",
+    "load_all_knowledge_documents",
     "split_nutrition_documents",
     "get_embedding_model",
     "get_or_create_vector_store",

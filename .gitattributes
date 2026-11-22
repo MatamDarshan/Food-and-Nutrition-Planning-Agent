@@ -1,0 +1,8 @@
+# Binary assets must never be line-ending normalized (core.autocrlf=true on Windows).
+*.pdf binary
+*.faiss binary
+*.pkl binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
