@@ -5,6 +5,7 @@ Run locally: uvicorn api.main:app --reload --port 8000
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
@@ -28,10 +29,29 @@ from api.schemas import (
 BASE_DIR = Path(__file__).resolve().parent.parent
 DIST_DIR = BASE_DIR / "frontend" / "dist"
 
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Preload the RAG embedding model and FAISS index in the background."""
+    import threading
+
+    def _load() -> None:
+        try:
+            from rag.retriever import retrieve_relevant_chunks
+
+            retrieve_relevant_chunks("nutrition guidelines", k=1)
+        except Exception:
+            # RAG warmup is best-effort; chat still handles runtime errors.
+            pass
+
+    threading.Thread(target=_load, daemon=True, name="rag-warmup").start()
+    yield
+
+
 app = FastAPI(
     title="AI-Based Food and Nutrition Planning Agent API",
     description="REST adapter for the ICMR-NIN nutrition planning engine.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 app.add_middleware(
     CORSMiddleware,
